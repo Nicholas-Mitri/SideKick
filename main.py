@@ -23,6 +23,12 @@ import openai
 import os
 import json
 
+import sounddevice as sd
+import numpy as np
+import threading
+import tempfile
+import wave
+
 
 class SidekickUI(QWidget):
     def __init__(self):
@@ -477,9 +483,66 @@ class SidekickUI(QWidget):
 
     def on_talk_button_pressed(self):
         self.talk_button.setText("Listening...")
+        self.audio_fs = 16000  # Sample rate
+        self.audio_recording = True
+        self.audio_frames = []
+
+        def callback(indata, frames, time, status):
+            if self.audio_recording:
+                self.audio_frames.append(indata.copy())
+            else:
+                raise sd.CallbackStop()
+
+        # Start recording in a thread to avoid blocking the UI
+        def record_audio():
+            with sd.InputStream(
+                samplerate=self.audio_fs, channels=1, dtype="int16", callback=callback
+            ):
+                while self.audio_recording:
+                    sd.sleep(50)
+
+        self.audio_thread = threading.Thread(target=record_audio, daemon=True)
+        self.audio_thread.start()
 
     def on_talk_button_released(self):
         self.talk_button.setText("Talk (Hold)")
+        # Stop recording
+        self.audio_recording = False
+        if hasattr(self, "audio_thread"):
+            self.audio_thread.join()
+        # Combine frames into a numpy array (optional: save or process)
+        if hasattr(self, "audio_frames"):
+            audio_data = np.concatenate(self.audio_frames, axis=0)
+            print(f"Recorded {len(audio_data)} samples.")
+
+            # Save as WAV to a temporary file
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as wav_temp:
+                with wave.open(wav_temp, "wb") as wf:
+                    wf.setnchannels(1)
+                    wf.setsampwidth(2)  # 16-bit audio
+                    wf.setframerate(self.audio_fs)
+                    wf.writeframes(audio_data.tobytes())
+                self.last_audio_wav_path = wav_temp.name  # Store path for later use
+
+            print(f"Audio saved as wav in tempfile: {self.last_audio_wav_path}")
+            transcribed_text = openai.transcribe_audio(self.last_audio_wav_path)
+            print(f"Transcribed text: {transcribed_text}")
+            self.prompt_input.setText(transcribed_text)
+            self.on_send_button_clicked()
+            self.clean_last_audio_tempfile()
+
+    def clean_last_audio_tempfile(self):
+        """
+        Delete the last temporary audio file if it exists.
+        """
+        if hasattr(self, "last_audio_wav_path") and self.last_audio_wav_path:
+            try:
+                if os.path.exists(self.last_audio_wav_path):
+                    os.remove(self.last_audio_wav_path)
+                    print(f"Deleted tempfile: {self.last_audio_wav_path}")
+                self.last_audio_wav_path = None
+            except Exception as e:
+                print(f"Error deleting tempfile: {e}")
 
 
 if __name__ == "__main__":

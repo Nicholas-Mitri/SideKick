@@ -15,6 +15,8 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QComboBox
+from PyQt6.QtCore import QPropertyAnimation, QEasingCurve
+
 import screen_grab, clipboard, TTS, asyncio, openai, os, json
 
 
@@ -58,7 +60,28 @@ class SidekickUI(QWidget):
             ]
 
     def init_ui(self):
+
         main_layout = QVBoxLayout()
+        self.right_widget_width = 140
+        self.expand_at_start = True
+        self.talk_button_height_after_expand = 30
+
+        # Set minimum app width
+        self.setMinimumWidth(100)
+
+        talk_layout = QHBoxLayout()
+        self.talk_button = QPushButton(
+            "Talk (Hold)"
+        )  # Button for voice input (hold to talk)
+        self.talk_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.expand_button = QPushButton()
+        self.expand_button.setFixedWidth(30)
+        self.expand_button.setText("-")
+        self.expand_button.clicked.connect(self.on_expand_button_toggle)
+
+        talk_layout.addWidget(self.talk_button)
+        talk_layout.addWidget(self.expand_button)
+        main_layout.addLayout(talk_layout)
 
         # User Prompt Input section: contains the text input, send button, talk button, and context selection
         prompt_layout = QHBoxLayout()
@@ -75,10 +98,6 @@ class SidekickUI(QWidget):
         self.send_button.clicked.connect(
             self.on_send_button_clicked
         )  # Connect to handler
-        self.talk_button = QPushButton(
-            "Talk (Hold)"
-        )  # Button for voice input (hold to talk)
-        self.talk_button.setCheckable(False)
 
         self.context_combo = QComboBox()
         self.context_combo.addItems(
@@ -88,13 +107,15 @@ class SidekickUI(QWidget):
 
         right_layout.addWidget(self.context_combo)
         right_layout.addWidget(self.send_button)
-        right_layout.addWidget(self.talk_button)
 
         # Make the prompt_input match the height of the right_layout
         # We'll use a QWidget as a container for the right_layout to get its size
         right_widget = QWidget()
         right_widget.setLayout(right_layout)
-        right_widget.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        right_widget.setFixedWidth(
+            self.right_widget_width
+        )  # Set a fixed width for the widget
+        right_widget.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
         self.prompt_input.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
@@ -109,11 +130,35 @@ class SidekickUI(QWidget):
 
         main_layout.addLayout(prompt_layout)
 
+        reply_and_options_layout = QHBoxLayout()
+
         # GPT Reply Display
         self.reply_display = QTextEdit()
         self.reply_display.setReadOnly(True)
         self.reply_display.setPlaceholderText("GPT reply will appear here...")
-        main_layout.addWidget(self.reply_display)
+
+        # Add 3 radio buttons to the right of the reply_display
+        radio_layout = QVBoxLayout()
+        self.radio1 = QRadioButton("Option 1")
+        self.radio2 = QRadioButton("Option 2")
+        self.radio3 = QRadioButton("Option 3")
+
+        radio_layout.addWidget(self.radio1)
+        radio_layout.addWidget(self.radio2)
+        radio_layout.addWidget(self.radio3)
+
+        reply_and_options_layout.addWidget(self.reply_display)
+        radio_widget = QWidget()
+        radio_widget.setLayout(radio_layout)
+        radio_widget.setFixedWidth(
+            self.right_widget_width
+        )  # Set a fixed width for the widget
+        radio_widget.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        # Set the height of radio_widget to match reply_display
+        radio_widget.setFixedHeight(self.reply_display.sizeHint().height())
+        reply_and_options_layout.addWidget(radio_widget)
+
+        main_layout.addLayout(reply_and_options_layout)
 
         reply_actions_layout = QHBoxLayout()
 
@@ -152,7 +197,7 @@ class SidekickUI(QWidget):
         main_layout.addLayout(exit_layout)
 
         self.setLayout(main_layout)
-        self.setMinimumWidth(400)
+        self.set_app_start_mode()
 
     # Define the send button handler
     def on_send_button_clicked(self):
@@ -224,6 +269,123 @@ class SidekickUI(QWidget):
 
         with open("conversations/conversation.json", "w", encoding="utf-8") as f:
             json.dump(self.context, f, ensure_ascii=False, indent=2)
+
+    def on_expand_button_toggle(self):
+
+        if self.expand_at_start:
+            self.expand_at_start = False
+            self.expand_button.setText("+")
+            for widget in self.findChildren(QWidget):
+                if widget is not self.talk_button and widget is not self.expand_button:
+                    widget.hide()
+
+            # Animate talk_button to 60x60
+            self.talk_button.setSizePolicy(
+                QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
+            )
+            # Make buttons small and ignore text width
+            self.talk_button.setMaximumWidth(90)
+
+            self.anim_h = QPropertyAnimation(self.talk_button, b"minimumHeight")
+            self.anim_h.setDuration(300)
+            self.anim_h.setStartValue(self.talk_button_height_after_expand)
+            self.anim_h.setEndValue(60)
+            self.anim_h.setEasingCurve(QEasingCurve.Type.OutCubic)
+            self.anim_h.start()
+
+            self.anim_w = QPropertyAnimation(self.talk_button, b"minimumWidth")
+            self.anim_w.setDuration(300)
+            self.anim_w.setStartValue(self.talk_button.width())
+            self.anim_w.setEndValue(90)
+            self.anim_w.setEasingCurve(QEasingCurve.Type.OutCubic)
+            self.anim_w.start()
+
+            # Animate expand button
+
+            self.anime_h = QPropertyAnimation(self.expand_button, b"minimumHeight")
+            self.anime_h.setDuration(300)
+            self.anime_h.setStartValue(self.talk_button_height_after_expand)
+            self.anime_h.setEndValue(60)
+            self.anime_h.setEasingCurve(QEasingCurve.Type.OutCubic)
+            self.anime_h.start()
+
+            # Animate app height and width to 200, and call resize to force shrink
+            self.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+            )
+            target_width = 180
+            target_height = 100
+            self.setMinimumSize(180, 100)
+
+            self.app_anim_h = QPropertyAnimation(self, b"maximumHeight")
+            self.app_anim_h.setDuration(300)
+            self.app_anim_h.setStartValue(self.height())
+            self.app_anim_h.setEndValue(target_height)
+            self.app_anim_h.setEasingCurve(QEasingCurve.Type.OutCubic)
+            self.app_anim_h.start()
+
+            self.app_anim_w = QPropertyAnimation(self, b"maximumWidth")
+            self.app_anim_w.setDuration(300)
+            self.app_anim_w.setStartValue(self.width())
+            self.app_anim_w.setEndValue(target_width)
+            self.app_anim_w.setEasingCurve(QEasingCurve.Type.OutCubic)
+            self.app_anim_w.start()
+
+        else:
+            self.expand_at_start = True
+            self.expand_button.setText("-")
+            for widget in self.findChildren(QWidget):
+                widget.show()
+
+            # Animate talk_button
+            self.talk_button.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+            )
+
+            self.talk_button.setMaximumWidth(900000)
+
+            self.anim_h = QPropertyAnimation(self.talk_button, b"minimumHeight")
+            self.anim_h.setDuration(300)
+            self.anim_h.setStartValue(60)
+            self.anim_h.setEndValue(self.talk_button_height_after_expand)
+            self.anim_h.setEasingCurve(QEasingCurve.Type.OutCubic)
+            self.anim_h.start()
+
+            # Animate expand button
+
+            self.anime_h = QPropertyAnimation(self.expand_button, b"minimumHeight")
+            self.anime_h.setDuration(300)
+            self.anime_h.setStartValue(60)
+            self.anime_h.setEndValue(self.talk_button_height_after_expand)
+            self.anime_h.setEasingCurve(QEasingCurve.Type.OutCubic)
+            self.anime_h.start()
+
+            self.setMaximumSize(1000000, 1000000)
+            self.setSizePolicy(
+                QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
+            )
+            # Animate app height to 700
+            self.app_anim_h = QPropertyAnimation(self, b"minimumHeight")
+            self.app_anim_h.setDuration(300)
+            self.app_anim_h.setStartValue(self.height())
+            self.app_anim_h.setEndValue(500)
+            self.app_anim_h.setEasingCurve(QEasingCurve.Type.OutCubic)
+            self.app_anim_h.start()
+            # Animate app height to 700
+            self.app_anim_w = QPropertyAnimation(self, b"minimumWidth")
+            self.app_anim_w.setDuration(300)
+            self.app_anim_w.setStartValue(self.width())
+            self.app_anim_w.setEndValue(700)
+            self.app_anim_w.setEasingCurve(QEasingCurve.Type.OutCubic)
+            self.app_anim_w.start()
+
+    def set_app_start_mode(self):
+        if self.expand_at_start:
+            for widget in self.findChildren(QWidget):
+                widget.show()
+        else:
+            if widget is not self.talk_button and widget is not self.expand_button:
+                widget.hide()
 
 
 if __name__ == "__main__":

@@ -19,18 +19,22 @@ class SidekickUI(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Sidekick")
-        self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
+        # Make the window always on top
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
         self.init_ui()
 
     def init_ui(self):
         main_layout = QVBoxLayout()
 
-        # GPT Reply Display
-        self.reply_display = QTextEdit()
-        self.reply_display.setReadOnly(True)
-        self.reply_display.setPlaceholderText("GPT reply will appear here...")
-        main_layout.addWidget(QLabel("GPT Reply:"))
-        main_layout.addWidget(self.reply_display)
+        # Listen Button (hold to talk)
+        listen_layout = QHBoxLayout()
+        self.listen_button = QPushButton("Speak (Hold)")
+        self.listen_button.setCheckable(False)
+        self.listen_button.setSizePolicy(
+            QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed
+        )
+        listen_layout.addWidget(self.listen_button)
+        main_layout.addLayout(listen_layout)
 
         # User Prompt Input
         prompt_layout = QHBoxLayout()
@@ -41,21 +45,26 @@ class SidekickUI(QWidget):
         prompt_layout.addWidget(self.send_button)
         main_layout.addLayout(prompt_layout)
 
-        # Listen Button (hold to talk)
-        listen_layout = QHBoxLayout()
-        self.listen_button = QPushButton("🎤 Hold to Listen")
-        self.listen_button.setCheckable(False)
-        listen_layout.addWidget(self.listen_button)
-        listen_layout.addSpacerItem(
+        # GPT Reply Display
+        self.reply_display = QTextEdit()
+        self.reply_display.setReadOnly(True)
+        self.reply_display.setPlaceholderText("GPT reply will appear here...")
+        main_layout.addWidget(self.reply_display)
+
+        # Copy Reply Button
+        copy_layout = QHBoxLayout()
+        copy_layout.addSpacerItem(
             QSpacerItem(
                 40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
             )
         )
-        main_layout.addLayout(listen_layout)
+        self.copy_reply_button = QPushButton("Copy Reply")
+        copy_layout.addWidget(self.copy_reply_button)
+        main_layout.addLayout(copy_layout)
 
-        # Screen Content Radio Button
+        # Screen Content Controls
         screen_layout = QHBoxLayout()
-        self.screen_radio = QRadioButton("Include screen content as context")
+        self.screen_radio = QRadioButton("Automatically grab screen content")
         screen_layout.addWidget(self.screen_radio)
         screen_layout.addSpacerItem(
             QSpacerItem(
@@ -64,15 +73,27 @@ class SidekickUI(QWidget):
         )
         main_layout.addLayout(screen_layout)
 
-        # Exit Button
         exit_layout = QHBoxLayout()
-        self.exit_button = QPushButton("Exit App")
+        # Add "Grab screen content" button here
+        self.listen_grab_screen_button = QPushButton("Grab Screen Content")
+        exit_layout.addWidget(self.listen_grab_screen_button)
         exit_layout.addSpacerItem(
             QSpacerItem(
                 40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
             )
         )
+        # Exit Button
+        exit_layout.addSpacerItem(
+            QSpacerItem(
+                40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
+            )
+        )
+
+        self.exit_button = QPushButton("Exit App")
+        exit_layout.addWidget(self.listen_grab_screen_button)
+
         exit_layout.addWidget(self.exit_button)
+
         main_layout.addLayout(exit_layout)
 
         self.setLayout(main_layout)

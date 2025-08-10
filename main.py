@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QComboBox
-import screen_grab, clipboard, TTS, asyncio
+import screen_grab, clipboard, TTS, asyncio, openai
 
 
 class SidekickUI(QWidget):
@@ -25,6 +25,8 @@ class SidekickUI(QWidget):
         # Make the window always on top
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
         self.init_ui()
+        self.always_read = True
+        self.content = []
 
     def init_ui(self):
         main_layout = QVBoxLayout()
@@ -125,16 +127,44 @@ class SidekickUI(QWidget):
 
     # Define the send button handler
     def on_send_button_clicked(self):
+        # Get the prompt text from the input field
         prompt_text = self.prompt_input.toPlainText()
-        # Here you would handle sending the prompt, e.g., call your GPT function
-        # For now, just print or set a placeholder reply
-        if self.context_combo.currentText() == "Screenshot":
-            screenshot = screen_grab.grab_area_interactive()
-        elif self.context_combo.currentText() == "Clipboard":
-            clipboard_text = clipboard.get_last_clipboard_text()
-            prompt_text = f"{prompt_text}\nContext:{clipboard_text}"
-        self.reply_display.setPlainText(f"Sent prompt: {prompt_text}")
+        self.content.append({"type": "input_text", "text": prompt_text})
 
+        # Handle context selection: Screenshot or Clipboard
+        if self.context_combo.currentText() == "Screenshot":
+            # User chose to attach a screenshot
+            img_url = screen_grab.grab_area_interactive()
+            if img_url:
+                # If the last input_text is empty, add a default question
+                if not self.content[-1]["text"]:
+                    self.content.append(
+                        {"type": "input_text", "text": "What is in this image?"}
+                    )
+                # Attach the image to the message content
+                self.content.append(openai.attach_image_message(img_url))
+            # Clean up the temporary screenshot file
+            screen_grab.cleanup_tempfile(img_url)
+        elif self.context_combo.currentText() == "Clipboard":
+            # User chose to attach clipboard text as context
+            clipboard_text = clipboard.get_last_clipboard_text()
+            if clipboard_text:
+                self.content.append(
+                    {"type": "input_text", "text": f"Context: {clipboard_text}"}
+                )
+
+        # Prepare the message for the OpenAI API
+        messages = [{"role": "user", "content": self.content}]
+        reply = openai.chat_with_gpt5(messages)
+        self.content.append({"role": "assistant", "content": reply})
+
+        # Display the reply in the UI
+        self.reply_display.setPlainText(reply)
+
+        # Optionally read the reply aloud if always_read is enabled
+        if self.always_read:
+            reply = self.reply_display.toPlainText()
+            asyncio.run(TTS.speak_async(reply))
     def on_copy_reply_button_clicked(self):
         reply_text = self.reply_display.toPlainText()
         clipboard.set_clipboard_text(reply_text)
@@ -143,9 +173,13 @@ class SidekickUI(QWidget):
         reply_text = self.reply_display.toPlainText()
         asyncio.run(TTS.speak_async(reply_text))
 
+    def print_context(self):
+        print(self.content)
 
-# Run the application
+    def clear_context(self):
+        self.content = []
 
+    def save_conversation
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

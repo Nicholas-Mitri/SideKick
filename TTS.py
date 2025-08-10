@@ -77,5 +77,3 @@ def clean_tmp_audio(tmpfile_path):
 if __name__ == "__main__":
     # Test speech generation
     asyncio.run(play_speech())
-    # Test a voice
-    asyncio.run(test_voice_realtime("en-US-AndrewNeural"))

@@ -19,7 +19,7 @@ def grab_area_interactive(
     - Requires macOS Screen Recording permission for your terminal/IDE/Python.
     """
     if output_path is None:
-        fd, tmp_name = tempfile.mkstemp(suffix=".png")
+        fd, tmp_name = tempfile.mkstemp(suffix=".jpeg")
         target = Path(tmp_name)
         target.unlink(missing_ok=True)  # Remove placeholder
     else:
@@ -40,19 +40,18 @@ def grab_area_interactive(
         if output_path is None and target.exists():
             target.unlink(missing_ok=True)
         return None
+    # Always return target, regardless of output_path or PIL availability
+    return target
 
-    if output_path is not None:
-        return target
 
-    # Return PIL Image and cleanup temp file
-    if Image is None:
-        return target
-
-    img = Image.open(target)
-    img.load()
-    if output_path is None:  # Clean up temp file after loading
-        target.unlink(missing_ok=True)
-    return img
+def cleanup_tempfile(target: Union[str, Path]):
+    """
+    Deletes the file at the given path. Use for cleaning up temp screenshot files.
+    """
+    try:
+        Path(target).unlink(missing_ok=True)
+    except Exception as e:
+        print(f"Error deleting temporary file {target}: {e}")
 
 
 if __name__ == "__main__":

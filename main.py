@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QComboBox
-import screen_grab, clipboard, TTS, asyncio, openai
+import screen_grab, clipboard, TTS, asyncio, openai, os, json
 
 
 class SidekickUI(QWidget):
@@ -26,7 +26,13 @@ class SidekickUI(QWidget):
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
         self.init_ui()
         self.always_read = True
-        self.content = []
+
+        conversation_path = "conversations/conversation.json"
+        if os.path.exists(conversation_path):
+            with open(conversation_path, "r", encoding="utf-8") as f:
+                self.context = json.load(f)
+        else:
+            self.context = []
 
     def init_ui(self):
         main_layout = QVBoxLayout()
@@ -117,7 +123,7 @@ class SidekickUI(QWidget):
             )
         )
         self.exit_button = QPushButton("Exit App")
-
+        self.exit_button.clicked.connect(self.save_conversation)
         exit_layout.addWidget(self.exit_button)
 
         main_layout.addLayout(exit_layout)
@@ -129,7 +135,8 @@ class SidekickUI(QWidget):
     def on_send_button_clicked(self):
         # Get the prompt text from the input field
         prompt_text = self.prompt_input.toPlainText()
-        self.content.append({"type": "input_text", "text": prompt_text})
+        content = []
+        content.append({"type": "input_text", "text": prompt_text})
 
         # Handle context selection: Screenshot or Clipboard
         if self.context_combo.currentText() == "Screenshot":
@@ -137,26 +144,33 @@ class SidekickUI(QWidget):
             img_url = screen_grab.grab_area_interactive()
             if img_url:
                 # If the last input_text is empty, add a default question
-                if not self.content[-1]["text"]:
-                    self.content.append(
+                if not content[-1]["text"]:
+                    content.append(
                         {"type": "input_text", "text": "What is in this image?"}
                     )
                 # Attach the image to the message content
-                self.content.append(openai.attach_image_message(img_url))
+                content.append(openai.attach_image_message(img_url))
             # Clean up the temporary screenshot file
             screen_grab.cleanup_tempfile(img_url)
         elif self.context_combo.currentText() == "Clipboard":
             # User chose to attach clipboard text as context
             clipboard_text = clipboard.get_last_clipboard_text()
             if clipboard_text:
-                self.content.append(
+                content.append(
                     {"type": "input_text", "text": f"Context: {clipboard_text}"}
                 )
 
         # Prepare the message for the OpenAI API
-        messages = [{"role": "user", "content": self.content}]
-        reply = openai.chat_with_gpt5(messages)
-        self.content.append({"role": "assistant", "content": reply})
+        messages = {"role": "user", "content": content}
+        self.context.append(messages)
+        print(self.context)
+        reply = openai.chat_with_gpt5(self.context)
+        self.context.append(
+            {
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": f"{reply}"}],
+            }
+        )
 
         # Display the reply in the UI
         self.reply_display.setPlainText(reply)
@@ -165,6 +179,7 @@ class SidekickUI(QWidget):
         if self.always_read:
             reply = self.reply_display.toPlainText()
             asyncio.run(TTS.speak_async(reply))
+
     def on_copy_reply_button_clicked(self):
         reply_text = self.reply_display.toPlainText()
         clipboard.set_clipboard_text(reply_text)
@@ -174,12 +189,20 @@ class SidekickUI(QWidget):
         asyncio.run(TTS.speak_async(reply_text))
 
     def print_context(self):
-        print(self.content)
+        print(self.context)
 
     def clear_context(self):
-        self.content = []
+        self.context = []
 
-    def save_conversation
+    def save_conversation(self):
+        with open("conversation_readable.txt", "w") as f:
+            for message in self.context:
+                f.write(f"{message["role"]}: {message["content"]}\n")
+            f.write("\n")
+
+        with open("conversations/conversation.json", "w", encoding="utf-8") as f:
+            json.dump(self.context, f, ensure_ascii=False, indent=2)
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

@@ -19,8 +19,7 @@ def chat_with_gpt5(
     tool_choice=None,
     max_tokens=800,
     # New GPT-5 parameters
-    verbosity=None,  # Controls response length/detail
-    reasoning_effort=None,  # "low", "medium", "high" for thinking depth
+    reasoning=None,  # {"effort": "medium"}
     stream=False,
 ):
     """
@@ -33,12 +32,6 @@ def chat_with_gpt5(
         "max_output_tokens": max_tokens,
         "stream": stream,
     }
-
-    # Add GPT-5 specific parameters if provided
-    if verbosity is not None:
-        payload["verbosity"] = verbosity
-    if reasoning_effort is not None:
-        payload["reasoning_effort"] = reasoning_effort
 
     # Existing parameters
     if tools:

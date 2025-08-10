@@ -30,9 +30,32 @@ class SidekickUI(QWidget):
         conversation_path = "conversations/conversation.json"
         if os.path.exists(conversation_path):
             with open(conversation_path, "r", encoding="utf-8") as f:
-                self.context = json.load(f)
+                try:
+                    self.context = json.load(f)
+                except json.JSONDecodeError:
+                    self.context = [
+                        {
+                            "role": "system",
+                            "content": [
+                                {
+                                    "type": "input_text",
+                                    "text": "very brief to the point answers only.",
+                                }
+                            ],
+                        }
+                    ]
         else:
-            self.context = []
+            self.context = [
+                {
+                    "role": "system",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": "very brief to the point answers only.",
+                        }
+                    ],
+                }
+            ]
 
     def init_ui(self):
         main_layout = QVBoxLayout()
@@ -163,7 +186,6 @@ class SidekickUI(QWidget):
         # Prepare the message for the OpenAI API
         messages = {"role": "user", "content": content}
         self.context.append(messages)
-        print(self.context)
         reply = openai.chat_with_gpt5(self.context)
         self.context.append(
             {

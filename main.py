@@ -1,4 +1,3 @@
-from calendar import c
 import sys
 from PyQt6.QtWidgets import (
     QApplication,
@@ -12,19 +11,24 @@ from PyQt6.QtWidgets import (
     QLabel,
     QSpacerItem,
     QSizePolicy,
+    QComboBox,
 )
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QComboBox
-from PyQt6.QtCore import QPropertyAnimation, QEasingCurve
+from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve
 
-import screen_grab, clipboard, TTS, asyncio, openai, os, json
+import screen_grab
+import clipboard
+import TTS
+import asyncio
+import openai
+import os
+import json
 
 
 class SidekickUI(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Sidekick")
-        # Make the window always on top
+        # Keep the window always on top
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
         self.init_ui()
         self.always_read = True
@@ -60,7 +64,6 @@ class SidekickUI(QWidget):
             ]
 
     def init_ui(self):
-
         main_layout = QVBoxLayout()
         self.right_widget_width = 140
         self.expand_at_start = True
@@ -69,121 +72,130 @@ class SidekickUI(QWidget):
         # Set minimum app width
         self.setMinimumWidth(100)
 
+        # --- Top Row: Talk and Expand Buttons ---
         talk_layout = QHBoxLayout()
-        self.talk_button = QPushButton(
-            "Talk (Hold)"
-        )  # Button for voice input (hold to talk)
+        self.talk_button = QPushButton("Talk (Hold)")  # Hold to talk (voice input)
         self.talk_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.talk_button.pressed.connect(self.on_talk_button_pressed)
+        self.talk_button.released.connect(self.on_talk_button_released)
+
         self.expand_button = QPushButton()
         self.expand_button.setFixedWidth(30)
         self.expand_button.setText("-")
         self.expand_button.clicked.connect(self.on_expand_button_toggle)
 
+        self.talk_button.setStyleSheet(
+            """
+                QPushButton {
+                    border-radius: 10px;
+                    color: white;
+                    background-color: #3498db;
+                    padding: 6px 10px;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+                QPushButton:pressed {
+                    background-color: #e74c3c; /* Record button red on press */
+                    color: white; /* White text for contrast */
+                }
+                """
+        )
+
+        self.expand_button.setStyleSheet(
+            """
+                QPushButton {
+                    border-radius: 10px;
+                    color: white;
+                    background-color: #3498db;
+                    padding: 6px 10px;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+                QPushButton:pressed {
+                    background-color: #2471a3;
+                }
+                """
+        )
+
         talk_layout.addWidget(self.talk_button)
         talk_layout.addWidget(self.expand_button)
         main_layout.addLayout(talk_layout)
 
-        # User Prompt Input section: contains the text input, send button, talk button, and context selection
+        # --- Prompt Input Section ---
         prompt_layout = QHBoxLayout()
 
-        # Left: Prompt input
+        # Left: Prompt input field
         self.prompt_input = QTextEdit()
-        self.prompt_input.setPlaceholderText(
-            "Type your prompt here..."
-        )  # User types prompt here
+        self.prompt_input.setPlaceholderText("Type your prompt here...")
 
-        # Right: Vertical layout for buttons and context
+        # Right: Send button and context selection
         right_layout = QVBoxLayout()
-        self.send_button = QPushButton("Send")  # Button to send prompt
-        self.send_button.clicked.connect(
-            self.on_send_button_clicked
-        )  # Connect to handler
+        self.send_button = QPushButton("Send")
+        self.send_button.clicked.connect(self.on_send_button_clicked)
 
         self.context_combo = QComboBox()
-        self.context_combo.addItems(
-            ["No Context", "Clipboard", "Screenshot"]
-        )  # Context options
+        self.context_combo.addItems(["No Context", "Clipboard", "Screenshot"])
         self.context_combo.setToolTip("Select context to add to your prompt")
 
         right_layout.addWidget(self.context_combo)
         right_layout.addWidget(self.send_button)
 
-        # Make the prompt_input match the height of the right_layout
-        # We'll use a QWidget as a container for the right_layout to get its size
+        # Container for right_layout to control its size
         right_widget = QWidget()
         right_widget.setLayout(right_layout)
-        right_widget.setFixedWidth(
-            self.right_widget_width
-        )  # Set a fixed width for the widget
+        right_widget.setFixedWidth(self.right_widget_width)
         right_widget.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
         self.prompt_input.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
-        # Set minimum height of prompt_input to match the right_widget
-        # We'll update the height after layout, but for now, set a reasonable minimum
         self.prompt_input.setMinimumHeight(80)
         right_widget.setMinimumHeight(80)
 
         prompt_layout.addWidget(self.prompt_input)
         prompt_layout.addWidget(right_widget)
-
         main_layout.addLayout(prompt_layout)
 
+        # --- Reply and Options Section ---
         reply_and_options_layout = QHBoxLayout()
 
-        # GPT Reply Display
+        # GPT reply display
         self.reply_display = QTextEdit()
         self.reply_display.setReadOnly(True)
         self.reply_display.setPlaceholderText("GPT reply will appear here...")
 
-        # Add 3 radio buttons to the right of the reply_display
-        radio_layout = QVBoxLayout()
+        # Options: radio buttons, copy, read
+        options_layout = QVBoxLayout()
         self.radio1 = QRadioButton("Option 1")
         self.radio2 = QRadioButton("Option 2")
         self.radio3 = QRadioButton("Option 3")
 
-        radio_layout.addWidget(self.radio1)
-        radio_layout.addWidget(self.radio2)
-        radio_layout.addWidget(self.radio3)
+        self.copy_reply_button = QPushButton("Copy")
+        self.copy_reply_button.clicked.connect(self.on_copy_reply_button_clicked)
+
+        self.read_button = QPushButton("Read")
+        self.read_button.clicked.connect(self.on_read_button_clicked)
+
+        options_layout.addWidget(self.radio1)
+        options_layout.addWidget(self.radio2)
+        options_layout.addWidget(self.radio3)
+        options_layout.addWidget(self.copy_reply_button)
+        options_layout.addWidget(self.read_button)
 
         reply_and_options_layout.addWidget(self.reply_display)
-        radio_widget = QWidget()
-        radio_widget.setLayout(radio_layout)
-        radio_widget.setFixedWidth(
-            self.right_widget_width
-        )  # Set a fixed width for the widget
-        radio_widget.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        # Set the height of radio_widget to match reply_display
-        radio_widget.setFixedHeight(self.reply_display.sizeHint().height())
-        reply_and_options_layout.addWidget(radio_widget)
+
+        options_widget = QWidget()
+        options_widget.setLayout(options_layout)
+        options_widget.setFixedWidth(self.right_widget_width)
+        options_widget.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        options_widget.setFixedHeight(self.reply_display.sizeHint().height())
+        reply_and_options_layout.addWidget(options_widget)
 
         main_layout.addLayout(reply_and_options_layout)
 
-        reply_actions_layout = QHBoxLayout()
-
-        # Copy Button
-        self.copy_reply_button = QPushButton("Copy Reply")
-        reply_actions_layout.addWidget(self.copy_reply_button)
-        self.copy_reply_button.clicked.connect(
-            self.on_copy_reply_button_clicked
-        )  # Connect to handler
-        reply_actions_layout.addSpacerItem(
-            QSpacerItem(
-                40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
-            )
-        )
-
-        # Read Button
-        self.read_button = QPushButton("Read")
-        self.read_button.setCheckable(False)
-        self.read_button.clicked.connect(self.on_read_button_clicked)
-
-        reply_actions_layout.addWidget(self.read_button)
-
-        main_layout.addLayout(reply_actions_layout)
-
-        # Exit Button
+        # --- Exit Button Row ---
         exit_layout = QHBoxLayout()
         exit_layout.addSpacerItem(
             QSpacerItem(
@@ -193,42 +205,42 @@ class SidekickUI(QWidget):
         self.exit_button = QPushButton("Exit App")
         self.exit_button.clicked.connect(self.save_conversation)
         exit_layout.addWidget(self.exit_button)
-
         main_layout.addLayout(exit_layout)
 
         self.setLayout(main_layout)
         self.set_app_start_mode()
 
-    # Define the send button handler
     def on_send_button_clicked(self):
-        # Get the prompt text from the input field
+        """
+        Handler for the Send button.
+        Gathers the prompt and context, sends to OpenAI, and displays the reply.
+        """
         prompt_text = self.prompt_input.toPlainText()
-        content = []
-        content.append({"type": "input_text", "text": prompt_text})
+        content = [{"type": "input_text", "text": prompt_text}]
 
         # Handle context selection: Screenshot or Clipboard
-        if self.context_combo.currentText() == "Screenshot":
-            # User chose to attach a screenshot
+        context_type = self.context_combo.currentText()
+        if context_type == "Screenshot":
+            # Attach screenshot as context
             img_url = screen_grab.grab_area_interactive()
             if img_url:
-                # If the last input_text is empty, add a default question
+                # If prompt is empty, add a default question for the image
                 if not content[-1]["text"]:
                     content.append(
                         {"type": "input_text", "text": "What is in this image?"}
                     )
-                # Attach the image to the message content
                 content.append(openai.attach_image_message(img_url))
             # Clean up the temporary screenshot file
             screen_grab.cleanup_tempfile(img_url)
-        elif self.context_combo.currentText() == "Clipboard":
-            # User chose to attach clipboard text as context
+        elif context_type == "Clipboard":
+            # Attach clipboard text as context
             clipboard_text = clipboard.get_last_clipboard_text()
             if clipboard_text:
                 content.append(
                     {"type": "input_text", "text": f"Context: {clipboard_text}"}
                 )
 
-        # Prepare the message for the OpenAI API
+        # Prepare and send message to OpenAI
         messages = {"role": "user", "content": content}
         self.context.append(messages)
         reply = openai.chat_with_gpt5(self.context)
@@ -248,42 +260,80 @@ class SidekickUI(QWidget):
             asyncio.run(TTS.speak_async(reply))
 
     def on_copy_reply_button_clicked(self):
+        """Copy the reply text to the clipboard."""
         reply_text = self.reply_display.toPlainText()
         clipboard.set_clipboard_text(reply_text)
 
     def on_read_button_clicked(self):
+        """Read the reply text aloud using TTS."""
         reply_text = self.reply_display.toPlainText()
         asyncio.run(TTS.speak_async(reply_text))
 
     def print_context(self):
+        """Print the current conversation context to the console."""
         print(self.context)
 
     def clear_context(self):
+        """Clear the conversation context."""
         self.context = []
 
     def save_conversation(self):
+        """Save the conversation to a readable text file and a JSON file."""
         with open("conversation_readable.txt", "w") as f:
             for message in self.context:
-                f.write(f"{message["role"]}: {message["content"]}\n")
+                f.write(f"{message['role']}: {message['content']}\n")
             f.write("\n")
 
         with open("conversations/conversation.json", "w", encoding="utf-8") as f:
             json.dump(self.context, f, ensure_ascii=False, indent=2)
 
     def on_expand_button_toggle(self):
-
+        """
+        Toggle between expanded and compact UI modes with animations.
+        """
         if self.expand_at_start:
+            # Collapse UI
             self.expand_at_start = False
             self.expand_button.setText("+")
             for widget in self.findChildren(QWidget):
                 if widget is not self.talk_button and widget is not self.expand_button:
                     widget.hide()
 
-            # Animate talk_button to 60x60
+            self.talk_button.setStyleSheet(
+                """
+                QPushButton {
+                    border-radius: 10px;
+                    color: white;
+                    background-color: #3498db;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+                QPushButton:pressed {
+                    background-color: #e74c3c; /* Record button red on press */
+                    color: white; /* White text for contrast */
+                }
+                """
+            )
+            self.expand_button.setStyleSheet(
+                """
+                QPushButton {
+                    border-radius: 10px;
+                    color: white;
+                    background-color: #3498db;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+                QPushButton:pressed {
+                    background-color: #2471a3;
+                }
+                """
+            )
+            # Animate talk_button to compact size
             self.talk_button.setSizePolicy(
                 QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
             )
-            # Make buttons small and ignore text width
             self.talk_button.setMaximumWidth(90)
 
             self.anim_h = QPropertyAnimation(self.talk_button, b"minimumHeight")
@@ -300,8 +350,7 @@ class SidekickUI(QWidget):
             self.anim_w.setEasingCurve(QEasingCurve.Type.OutCubic)
             self.anim_w.start()
 
-            # Animate expand button
-
+            # Animate expand button to compact height
             self.anime_h = QPropertyAnimation(self.expand_button, b"minimumHeight")
             self.anime_h.setDuration(300)
             self.anime_h.setStartValue(self.talk_button_height_after_expand)
@@ -309,13 +358,13 @@ class SidekickUI(QWidget):
             self.anime_h.setEasingCurve(QEasingCurve.Type.OutCubic)
             self.anime_h.start()
 
-            # Animate app height and width to 200, and call resize to force shrink
+            # Animate app to compact size
             self.setSizePolicy(
                 QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
             )
             target_width = 180
             target_height = 100
-            self.setMinimumSize(180, 100)
+            self.setMinimumSize(target_width, target_height)
 
             self.app_anim_h = QPropertyAnimation(self, b"maximumHeight")
             self.app_anim_h.setDuration(300)
@@ -332,16 +381,51 @@ class SidekickUI(QWidget):
             self.app_anim_w.start()
 
         else:
+
+            self.talk_button.setStyleSheet(
+                """
+                QPushButton {
+                    border-radius: 10px;
+                    color: white;
+                    background-color: #3498db;
+                    padding: 6px 10px;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+                QPushButton:pressed {
+                    background-color: #e74c3c; /* Record button red on press */
+                    color: white; /* White text for contrast */
+                }
+                """
+            )
+
+            self.expand_button.setStyleSheet(
+                """
+                QPushButton {
+                    border-radius: 10px;
+                    color: white;
+                    background-color: #3498db;
+                    padding: 6px 10px;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+                QPushButton:pressed {
+                    background-color: #2471a3;
+                }
+                """
+            )
+            # Expand UI
             self.expand_at_start = True
             self.expand_button.setText("-")
             for widget in self.findChildren(QWidget):
                 widget.show()
 
-            # Animate talk_button
+            # Animate talk_button to expanded size
             self.talk_button.setSizePolicy(
                 QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
             )
-
             self.talk_button.setMaximumWidth(900000)
 
             self.anim_h = QPropertyAnimation(self.talk_button, b"minimumHeight")
@@ -351,8 +435,7 @@ class SidekickUI(QWidget):
             self.anim_h.setEasingCurve(QEasingCurve.Type.OutCubic)
             self.anim_h.start()
 
-            # Animate expand button
-
+            # Animate expand button to expanded height
             self.anime_h = QPropertyAnimation(self.expand_button, b"minimumHeight")
             self.anime_h.setDuration(300)
             self.anime_h.setStartValue(60)
@@ -360,18 +443,19 @@ class SidekickUI(QWidget):
             self.anime_h.setEasingCurve(QEasingCurve.Type.OutCubic)
             self.anime_h.start()
 
+            # Remove app size limits and animate to expanded size
             self.setMaximumSize(1000000, 1000000)
             self.setSizePolicy(
                 QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
             )
-            # Animate app height to 700
+
             self.app_anim_h = QPropertyAnimation(self, b"minimumHeight")
             self.app_anim_h.setDuration(300)
             self.app_anim_h.setStartValue(self.height())
             self.app_anim_h.setEndValue(500)
             self.app_anim_h.setEasingCurve(QEasingCurve.Type.OutCubic)
             self.app_anim_h.start()
-            # Animate app height to 700
+
             self.app_anim_w = QPropertyAnimation(self, b"minimumWidth")
             self.app_anim_w.setDuration(300)
             self.app_anim_w.setStartValue(self.width())
@@ -380,12 +464,22 @@ class SidekickUI(QWidget):
             self.app_anim_w.start()
 
     def set_app_start_mode(self):
+        """
+        Show or hide widgets based on the initial expand/collapse state.
+        """
         if self.expand_at_start:
             for widget in self.findChildren(QWidget):
                 widget.show()
         else:
-            if widget is not self.talk_button and widget is not self.expand_button:
-                widget.hide()
+            for widget in self.findChildren(QWidget):
+                if widget is not self.talk_button and widget is not self.expand_button:
+                    widget.hide()
+
+    def on_talk_button_pressed(self):
+        self.talk_button.setText("Listening...")
+
+    def on_talk_button_released(self):
+        self.talk_button.setText("Talk (Hold)")
 
 
 if __name__ == "__main__":

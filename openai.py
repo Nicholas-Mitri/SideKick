@@ -1,5 +1,9 @@
 import os
 import requests
+import json
+from PyQt6.QtWidgets import QApplication
+import asyncio, TTS, re
+from TTS import enqueue as tts_enqueue, clear as tts_clear
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_API_BASE = "https://api.openai.com/v1"
@@ -58,6 +62,81 @@ def chat_with_gpt5(
                 if content.get("type") == "output_text":
                     assistant_text += content.get("text", "")
     return assistant_text
+
+
+def chat_with_gpt5_stream(
+    messages,
+    model="gpt-5-mini",  # May need to be "gpt-5-2025-08-07" or similar
+    tools=None,
+    tool_choice=None,
+    # New GPT-5 parameters
+    reasoning=None,  # {"effort": "medium"},
+    UI_object=None,
+):
+    """
+    Updated for GPT-5 API with new parameters
+    """
+    url = f"{OPENAI_API_BASE}/responses"
+    payload = {
+        "model": model,
+        "input": messages,
+        "stream": True,
+    }
+
+    # Existing parameters
+    if tools:
+        payload["tools"] = tools
+    if tool_choice:
+        payload["tool_choice"] = tool_choice
+
+    streaming_reply = ""
+    partial_transciption = ""
+    with requests.post(url, headers=openai_headers(), json=payload, stream=True) as r:
+        r.raise_for_status()
+        for raw in r.iter_lines(decode_unicode=True):
+            if not raw:
+                continue
+            if raw.startswith("data: "):
+                data = raw[6:]
+                if data.strip() == "[DONE]":
+                    break
+                try:
+                    obj = json.loads(data)
+                except Exception:
+                    continue
+                t = obj.get("type")
+
+                # Yield text deltas as they arrive
+                if t == "response.output_text.delta":
+                    # Depending on provider schema, text might be in obj["delta"]["text"] or obj["output_text"]["delta"]
+                    delta = obj.get("delta", {})
+                    if delta:
+                        streaming_reply += delta
+                        if UI_object is not None:
+                            UI_object.reply_display.setPlainText(streaming_reply)
+                            QApplication.processEvents()
+                            if UI_object.always_read:
+                                partial_transciption += delta
+                                if streaming_reply[-1] in [".", "!", "?"]:
+                                    # Look back up to the last 20 characters for a sentence end
+                                    last_few = streaming_reply[-20:]
+                                    # Regex: match . ! or ? not preceded and followed by a digit (not part of a number)
+                                    # and followed by space or end of string
+                                    match = re.search(
+                                        r"(?<!\d)([.!?])(?!\d)(\s|$)", last_few
+                                    )
+                                    if match:
+
+                                        # whenever you have a partial_transcription (or a completed sentence)
+                                        tts_enqueue(partial_transciption)
+                                        print(f"End of sentence detected in {last_few}")
+                                        partial_transciption = ""
+
+                    else:
+                        # when a new reply starts
+                        yield delta
+                elif t in ("response.output_text.done", "response.error"):
+                    break
 
 
 def attach_image_message(image_path):
@@ -124,9 +203,19 @@ def transcribe_audio(
 
 if __name__ == "__main__":
     # Example usage:
-    messages = [{"role": "user", "content": [{"type": "input_text", "text": "Hello"}]}]
-    reply = chat_with_gpt5(messages)
-
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": "What is the distance to the sun in different units",
+                }
+            ],
+        }
+    ]
+    reply = chat_with_gpt5_stream(messages)
+    print(list(reply))
     # To send an image:
     # img_msg = attach_image_message("my_image.png", "What is in this image?")
     # messages = [img_msg]

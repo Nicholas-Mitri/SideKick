@@ -5,6 +5,7 @@ import io
 import tempfile
 import threading
 import time
+from queue import Queue, Empty
 
 
 async def play_speech(text="Hello, this is a test!", voice="en-US-AndrewNeural"):
@@ -72,6 +73,58 @@ def clean_tmp_audio(tmpfile_path):
         print(f"Temporary file {tmpfile_path} deleted.")
     except Exception as e:
         print(f"Error deleting temporary file {tmpfile_path}: {e}")
+
+
+_play_queue = Queue()
+_worker_started = False
+
+
+def _tts_worker():
+    while True:
+        text = _play_queue.get()
+        try:
+            if not text:
+                continue
+            # Start async playback (returns immediately)
+            asyncio.run(speak_async(text))
+            # Wait for playback to start (up to ~2s)
+            waited = 0.0
+            while (
+                not pygame.mixer.get_init() or not pygame.mixer.music.get_busy()
+            ) and waited < 2.0:
+                time.sleep(0.05)
+                waited += 0.05
+            # Then wait until it finishes
+            while pygame.mixer.get_init() and pygame.mixer.music.get_busy():
+                time.sleep(0.05)
+        finally:
+            _play_queue.task_done()
+
+
+def _ensure_worker():
+    global _worker_started
+    if not _worker_started:
+        threading.Thread(target=_tts_worker, daemon=True).start()
+        _worker_started = True
+
+
+def enqueue(text: str):
+    _ensure_worker()
+    _play_queue.put(text)
+
+
+def clear():
+    # stop any current audio and empty the queue
+    try:
+        pygame.mixer.music.stop()
+    except Exception:
+        pass
+    try:
+        while True:
+            _play_queue.get_nowait()
+            _play_queue.task_done()
+    except Empty:
+        pass
 
 
 if __name__ == "__main__":

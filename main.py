@@ -270,7 +270,8 @@ class SidekickUI(QWidget):
         # Prepare and send message to OpenAI
         messages = {"role": "user", "content": content}
         self.context.append(messages)
-        reply = openai.chat_with_gpt5(self.context)
+        reply = openai.chat_with_gpt5_stream(self.context, UI_object=self)
+        reply = "".join(list(reply))
         self.context.append(
             {
                 "role": "assistant",
@@ -279,12 +280,12 @@ class SidekickUI(QWidget):
         )
 
         # Display the reply in the UI
-        self.reply_display.setPlainText(reply)
+        # self.reply_display.setPlainText(reply)
 
-        # Optionally read the reply aloud if always_read is enabled
-        if self.always_read:
-            reply = self.reply_display.toPlainText()
-            asyncio.run(TTS.speak_async(reply))
+        # # Optionally read the reply aloud if always_read is enabled
+        # if self.always_read:
+        #     reply = self.reply_display.toPlainText()
+        #     asyncio.run(TTS.speak_async(reply))
 
     def on_copy_reply_button_clicked(self):
         """Copy the reply text to the clipboard."""
@@ -337,37 +338,6 @@ class SidekickUI(QWidget):
                 if widget is not self.talk_button and widget is not self.expand_button:
                     widget.hide()
 
-            self.talk_button.setStyleSheet(
-                """
-                QPushButton {
-                    border-radius: 10px;
-                    color: white;
-                    background-color: #3498db;
-                }
-                QPushButton:hover {
-                    background-color: #2980b9;
-                }
-                QPushButton:pressed {
-                    background-color: #e74c3c; /* Record button red on press */
-                    color: white; /* White text for contrast */
-                }
-                """
-            )
-            self.expand_button.setStyleSheet(
-                """
-                QPushButton {
-                    border-radius: 10px;
-                    color: white;
-                    background-color: #3498db;
-                }
-                QPushButton:hover {
-                    background-color: #2980b9;
-                }
-                QPushButton:pressed {
-                    background-color: #2471a3;
-                }
-                """
-            )
             # Animate talk_button to compact size
             self.talk_button.setSizePolicy(
                 QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
@@ -420,40 +390,6 @@ class SidekickUI(QWidget):
 
         else:
 
-            self.talk_button.setStyleSheet(
-                """
-                QPushButton {
-                    border-radius: 10px;
-                    color: white;
-                    background-color: #3498db;
-                    padding: 6px 10px;
-                }
-                QPushButton:hover {
-                    background-color: #2980b9;
-                }
-                QPushButton:pressed {
-                    background-color: #e74c3c; /* Record button red on press */
-                    color: white; /* White text for contrast */
-                }
-                """
-            )
-
-            self.expand_button.setStyleSheet(
-                """
-                QPushButton {
-                    border-radius: 10px;
-                    color: white;
-                    background-color: #3498db;
-                    padding: 6px 10px;
-                }
-                QPushButton:hover {
-                    background-color: #2980b9;
-                }
-                QPushButton:pressed {
-                    background-color: #2471a3;
-                }
-                """
-            )
             # Expand UI
             self.expand_at_start = True
             self.expand_button.setText("-")
@@ -547,7 +483,28 @@ class SidekickUI(QWidget):
         self.audio_thread.start()
 
     def on_talk_button_released(self):
-        self.talk_button.setText("Talk (Hold)")
+        print("Talk button released")
+        self.talk_button.setStyleSheet(
+            """
+            QPushButton {
+                border-radius: 10px;
+                color: white;
+                background-color:  #27ae60;
+                padding: 6px 10px;
+            }
+            QPushButton:hover {
+                background-color:  #27ae60;
+            }
+            QPushButton:pressed {
+                background-color: #27ae60;
+            }
+            """
+        )
+        self.talk_button.setText("Thinking...")
+        self.talk_button.repaint()
+
+        print("Thinking...")
+        QApplication.processEvents()
         # Stop recording
         self.audio_recording = False
         if hasattr(self, "audio_thread"):
@@ -576,7 +533,25 @@ class SidekickUI(QWidget):
             print(f"Transcribed text: {transcribed_text}")
             self.prompt_input.setText(transcribed_text)
             self.on_send_button_clicked()
+            self.talk_button.setStyleSheet(
+                """
+                QPushButton {
+                    border-radius: 10px;
+                    color: white;
+                    background-color: #3498db;
+                    padding: 6px 10px;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+                QPushButton:pressed {
+                    background-color: #e74c3c; /* Record button red on press */
+                    color: white; /* White text for contrast */
+                }
+                """
+            )
             self.clean_last_audio_tempfile()
+            self.talk_button.setText("Talk (Hold)")
 
     def clean_last_audio_tempfile(self):
         """

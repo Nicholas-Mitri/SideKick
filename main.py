@@ -19,6 +19,8 @@ from PyQt6.QtCore import (
     QEasingCurve,
     QParallelAnimationGroup,
     QTimer,
+    QObject,
+    QEvent,
 )
 
 import screen_grab
@@ -28,12 +30,36 @@ import asyncio
 import openai
 import os
 import json
+import pygame
 
 import sounddevice as sd
 import numpy as np
 import threading
 import tempfile
 import wave
+
+
+class PromptInputEventFilter(QObject):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.KeyPress:
+            if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                modifiers = QApplication.keyboardModifiers()
+                # Only trigger if not holding Shift/Ctrl/Alt (i.e., plain Enter)
+                if not (
+                    modifiers
+                    & (
+                        Qt.KeyboardModifier.ShiftModifier
+                        | Qt.KeyboardModifier.ControlModifier
+                        | Qt.KeyboardModifier.AltModifier
+                    )
+                ):
+                    self.parent.on_send_button_clicked()
+                    return True  # suppress default
+        return False
 
 
 class SidekickUI(QWidget):
@@ -43,7 +69,6 @@ class SidekickUI(QWidget):
         # Keep the window always on top
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
         self.init_ui()
-        self.always_read = True
 
         conversation_path = "conversations/conversation.json"
         if os.path.exists(conversation_path):
@@ -76,14 +101,17 @@ class SidekickUI(QWidget):
             ]
 
     def init_ui(self):
-        main_layout = QVBoxLayout()
+        # Initialize SidekickUI state variables
+        self.websearch = False
+        self.auto_read = True
+        self.auto_grab = False
         self.right_widget_width = 140
         self.expand_at_start = False
         self.talk_button_height_after_expand = 30
 
         # Set minimum app width
         self.setMinimumWidth(100)
-
+        main_layout = QVBoxLayout()
         # --- Top Row: Talk and Expand Buttons ---
         talk_layout = QHBoxLayout()
         self.talk_button = QPushButton("Talk (Hold)")  # Hold to talk (voice input)
@@ -157,6 +185,9 @@ class SidekickUI(QWidget):
         self.prompt_input = QTextEdit()
         self.prompt_input.setPlaceholderText("Type your prompt here...")
 
+        self.prompt_input_event_filter = PromptInputEventFilter(self)
+        self.prompt_input.installEventFilter(self.prompt_input_event_filter)
+
         # Right: Send button and context selection
         right_layout = QVBoxLayout()
         self.send_button = QPushButton("Send")
@@ -195,9 +226,17 @@ class SidekickUI(QWidget):
 
         # Options: radio buttons, copy, read
         options_layout = QVBoxLayout()
-        self.radio1 = QRadioButton("Web Search")
-        self.radio2 = QRadioButton("Auto-Grab")
-        self.radio3 = QRadioButton("Option 3")
+        from PyQt6.QtWidgets import QCheckBox  # Ensure QCheckBox is imported
+
+        self.checkbox_websearch = QCheckBox("Web Search")
+        self.checkbox_websearch.setChecked(self.websearch)
+        self.checkbox_websearch.stateChanged.connect(self.on_websearch_state_changed)
+        self.checkbox_autograb = QCheckBox("Auto-Grab")
+        self.checkbox_autograb.setChecked(self.auto_grab)
+        self.checkbox_autograb.stateChanged.connect(self.on_autograb_state_changed)
+        self.checkbox_autoread = QCheckBox("Auto-Read")
+        self.checkbox_autoread.setChecked(self.auto_read)
+        self.checkbox_autoread.stateChanged.connect(self.on_autoread_state_changed)
 
         self.copy_reply_button = QPushButton("Copy")
         self.copy_reply_button.clicked.connect(self.on_copy_reply_button_clicked)
@@ -205,9 +244,12 @@ class SidekickUI(QWidget):
         self.read_button = QPushButton("Read")
         self.read_button.clicked.connect(self.on_read_button_clicked)
 
-        options_layout.addWidget(self.radio1)
-        options_layout.addWidget(self.radio2)
-        options_layout.addWidget(self.radio3)
+        self.stop_button = QPushButton("Read")
+        self.read_button.clicked.connect(self.on_read_button_clicked)
+
+        options_layout.addWidget(self.checkbox_websearch)
+        options_layout.addWidget(self.checkbox_autograb)
+        options_layout.addWidget(self.checkbox_autoread)
         options_layout.addWidget(self.copy_reply_button)
         options_layout.addWidget(self.read_button)
 
@@ -247,7 +289,7 @@ class SidekickUI(QWidget):
 
         # Handle context selection: Screenshot or Clipboard
         context_type = self.context_combo.currentText()
-        if context_type == "Screenshot":
+        if context_type == "Screenshot" or self.auto_grab:
             # Attach screenshot as context
             img_url = screen_grab.grab_area_interactive()
             if img_url:
@@ -279,23 +321,31 @@ class SidekickUI(QWidget):
             }
         )
 
-        # Display the reply in the UI
-        # self.reply_display.setPlainText(reply)
-
-        # # Optionally read the reply aloud if always_read is enabled
-        # if self.always_read:
-        #     reply = self.reply_display.toPlainText()
-        #     asyncio.run(TTS.speak_async(reply))
-
     def on_copy_reply_button_clicked(self):
         """Copy the reply text to the clipboard."""
         reply_text = self.reply_display.toPlainText()
         clipboard.set_clipboard_text(reply_text)
 
     def on_read_button_clicked(self):
-        """Read the reply text aloud using TTS."""
-        reply_text = self.reply_display.toPlainText()
-        asyncio.run(TTS.speak_async(reply_text))
+        # Check if audio is currently playing using pygame.mixer
+        try:
+            is_playing = pygame.mixer.get_init() and pygame.mixer.music.get_busy()
+            print(f"Audio playing: {is_playing}")
+        except Exception as e:
+            print(f"Error checking audio playback: {e}")
+
+        if not is_playing:
+            """Read the reply text aloud using TTS."""
+            reply_text = self.reply_display.toPlainText()
+            asyncio.run(TTS.speak_async(reply_text))
+        else:
+            # Stop audio playback if currently playing
+            try:
+                if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
+                    pygame.mixer.music.stop()
+                    print("Audio playback stopped.")
+            except Exception as e:
+                print(f"Error stopping audio playback: {e}")
 
     def print_context(self):
         """Print the current conversation context to the console."""
@@ -565,6 +615,15 @@ class SidekickUI(QWidget):
                 self.last_audio_wav_path = None
             except Exception as e:
                 print(f"Error deleting tempfile: {e}")
+
+    def on_websearch_state_changed(self, state):
+        self.websearch = state == Qt.CheckState.Checked.value
+
+    def on_autograb_state_changed(self, state):
+        self.auto_grab = state == Qt.CheckState.Checked.value
+
+    def on_autoread_state_changed(self, state):
+        self.auto_read = state == Qt.CheckState.Checked.value
 
 
 if __name__ == "__main__":

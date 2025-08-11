@@ -115,7 +115,7 @@ def chat_with_gpt5_stream(
                         if UI_object is not None:
                             UI_object.reply_display.setPlainText(streaming_reply)
                             QApplication.processEvents()
-                            if UI_object.always_read:
+                            if UI_object.auto_read:
                                 partial_transciption += delta
                                 if streaming_reply[-1] in [".", "!", "?"]:
                                     # Look back up to the last 20 characters for a sentence end

@@ -13,7 +13,13 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QComboBox,
 )
-from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve
+from PyQt6.QtCore import (
+    Qt,
+    QPropertyAnimation,
+    QEasingCurve,
+    QParallelAnimationGroup,
+    QTimer,
+)
 
 import screen_grab
 import clipboard
@@ -72,7 +78,7 @@ class SidekickUI(QWidget):
     def init_ui(self):
         main_layout = QVBoxLayout()
         self.right_widget_width = 140
-        self.expand_at_start = True
+        self.expand_at_start = False
         self.talk_button_height_after_expand = 30
 
         # Set minimum app width
@@ -86,44 +92,59 @@ class SidekickUI(QWidget):
         self.talk_button.released.connect(self.on_talk_button_released)
 
         self.expand_button = QPushButton()
-        self.expand_button.setFixedWidth(30)
-        self.expand_button.setText("-")
+        self.expand_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.expand_button.clicked.connect(self.on_expand_button_toggle)
 
         self.talk_button.setStyleSheet(
             """
-                QPushButton {
-                    border-radius: 10px;
-                    color: white;
-                    background-color: #3498db;
-                    padding: 6px 10px;
-                }
-                QPushButton:hover {
-                    background-color: #2980b9;
-                }
-                QPushButton:pressed {
-                    background-color: #e74c3c; /* Record button red on press */
-                    color: white; /* White text for contrast */
-                }
-                """
+            QPushButton {
+                border-radius: 10px;
+                color: white;
+                background-color: #3498db;
+                padding: 6px 10px;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+            QPushButton:pressed {
+                background-color: #e74c3c; /* Record button red on press */
+                color: white; /* White text for contrast */
+            }
+            """
         )
 
         self.expand_button.setStyleSheet(
             """
-                QPushButton {
-                    border-radius: 10px;
-                    color: white;
-                    background-color: #3498db;
-                    padding: 6px 10px;
-                }
-                QPushButton:hover {
-                    background-color: #2980b9;
-                }
-                QPushButton:pressed {
-                    background-color: #2471a3;
-                }
-                """
+            QPushButton {
+                border-radius: 10px;
+                color: white;
+                background-color: #3498db;
+                padding: 6px 10px;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+            QPushButton:pressed {
+                background-color: #2471a3;
+            }
+            """
         )
+        if self.expand_at_start:
+            self.expand_button.setFixedWidth(30)
+            self.expand_button.setText("-")
+
+        else:
+            self.expand_button.setText("+")
+
+            self.talk_button.setFixedSize(90, 60)
+            self.expand_button.setFixedWidth(30)
+
+            self.expand_button.setFixedHeight(self.talk_button.height())
+
+            target_width = 180
+            target_height = 100
+            self.setMinimumSize(target_width, target_height)
+            self.resize(target_width, target_height)
 
         talk_layout.addWidget(self.talk_button)
         talk_layout.addWidget(self.expand_button)
@@ -174,8 +195,8 @@ class SidekickUI(QWidget):
 
         # Options: radio buttons, copy, read
         options_layout = QVBoxLayout()
-        self.radio1 = QRadioButton("Option 1")
-        self.radio2 = QRadioButton("Option 2")
+        self.radio1 = QRadioButton("Web Search")
+        self.radio2 = QRadioButton("Auto-Grab")
         self.radio3 = QRadioButton("Option 3")
 
         self.copy_reply_button = QPushButton("Copy")
@@ -297,6 +318,17 @@ class SidekickUI(QWidget):
         """
         Toggle between expanded and compact UI modes with animations.
         """
+        # Disable UI while animations run to avoid clicks during geometry changes
+        self.setEnabled(False)
+
+        # Stop any previous animations and start a new group
+        if hasattr(self, "anim_group") and self.anim_group is not None:
+            try:
+                self.anim_group.stop()
+            except Exception:
+                pass
+        self.anim_group = QParallelAnimationGroup(self)
+
         if self.expand_at_start:
             # Collapse UI
             self.expand_at_start = False
@@ -347,14 +379,14 @@ class SidekickUI(QWidget):
             self.anim_h.setStartValue(self.talk_button_height_after_expand)
             self.anim_h.setEndValue(60)
             self.anim_h.setEasingCurve(QEasingCurve.Type.OutCubic)
-            self.anim_h.start()
+            self.anim_group.addAnimation(self.anim_h)
 
             self.anim_w = QPropertyAnimation(self.talk_button, b"minimumWidth")
             self.anim_w.setDuration(300)
             self.anim_w.setStartValue(self.talk_button.width())
             self.anim_w.setEndValue(90)
             self.anim_w.setEasingCurve(QEasingCurve.Type.OutCubic)
-            self.anim_w.start()
+            self.anim_group.addAnimation(self.anim_w)
 
             # Animate expand button to compact height
             self.anime_h = QPropertyAnimation(self.expand_button, b"minimumHeight")
@@ -362,7 +394,7 @@ class SidekickUI(QWidget):
             self.anime_h.setStartValue(self.talk_button_height_after_expand)
             self.anime_h.setEndValue(60)
             self.anime_h.setEasingCurve(QEasingCurve.Type.OutCubic)
-            self.anime_h.start()
+            self.anim_group.addAnimation(self.anime_h)
 
             # Animate app to compact size
             self.setSizePolicy(
@@ -377,14 +409,14 @@ class SidekickUI(QWidget):
             self.app_anim_h.setStartValue(self.height())
             self.app_anim_h.setEndValue(target_height)
             self.app_anim_h.setEasingCurve(QEasingCurve.Type.OutCubic)
-            self.app_anim_h.start()
+            self.anim_group.addAnimation(self.app_anim_h)
 
             self.app_anim_w = QPropertyAnimation(self, b"maximumWidth")
             self.app_anim_w.setDuration(300)
             self.app_anim_w.setStartValue(self.width())
             self.app_anim_w.setEndValue(target_width)
             self.app_anim_w.setEasingCurve(QEasingCurve.Type.OutCubic)
-            self.app_anim_w.start()
+            self.anim_group.addAnimation(self.app_anim_w)
 
         else:
 
@@ -439,7 +471,7 @@ class SidekickUI(QWidget):
             self.anim_h.setStartValue(60)
             self.anim_h.setEndValue(self.talk_button_height_after_expand)
             self.anim_h.setEasingCurve(QEasingCurve.Type.OutCubic)
-            self.anim_h.start()
+            self.anim_group.addAnimation(self.anim_h)
 
             # Animate expand button to expanded height
             self.anime_h = QPropertyAnimation(self.expand_button, b"minimumHeight")
@@ -447,7 +479,7 @@ class SidekickUI(QWidget):
             self.anime_h.setStartValue(60)
             self.anime_h.setEndValue(self.talk_button_height_after_expand)
             self.anime_h.setEasingCurve(QEasingCurve.Type.OutCubic)
-            self.anime_h.start()
+            self.anim_group.addAnimation(self.anime_h)
 
             # Remove app size limits and animate to expanded size
             self.setMaximumSize(1000000, 1000000)
@@ -460,14 +492,24 @@ class SidekickUI(QWidget):
             self.app_anim_h.setStartValue(self.height())
             self.app_anim_h.setEndValue(500)
             self.app_anim_h.setEasingCurve(QEasingCurve.Type.OutCubic)
-            self.app_anim_h.start()
+            self.anim_group.addAnimation(self.app_anim_h)
 
             self.app_anim_w = QPropertyAnimation(self, b"minimumWidth")
             self.app_anim_w.setDuration(300)
             self.app_anim_w.setStartValue(self.width())
             self.app_anim_w.setEndValue(700)
             self.app_anim_w.setEasingCurve(QEasingCurve.Type.OutCubic)
-            self.app_anim_w.start()
+            self.anim_group.addAnimation(self.app_anim_w)
+
+        # Re-enable UI when all animations finish
+        def _on_anims_finished():
+            self.setEnabled(True)
+            self.activateWindow()
+            # Ensure pending events are processed post-animation
+            QTimer.singleShot(0, QApplication.processEvents)
+
+        self.anim_group.finished.connect(_on_anims_finished)
+        self.anim_group.start()
 
     def set_app_start_mode(self):
         """
@@ -512,7 +554,12 @@ class SidekickUI(QWidget):
             self.audio_thread.join()
         # Combine frames into a numpy array (optional: save or process)
         if hasattr(self, "audio_frames"):
-            audio_data = np.concatenate(self.audio_frames, axis=0)
+            try:
+                audio_data = np.concatenate(self.audio_frames, axis=0)
+            except Exception as e:
+                print(f"Error combining audio frames: {e}")
+                return
+
             print(f"Recorded {len(audio_data)} samples.")
 
             # Save as WAV to a temporary file

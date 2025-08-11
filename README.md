@@ -1,20 +1,22 @@
 # Sidekick
 
-An always-on-top mini application that provides seamless interaction with OpenAI GPT through voice prompts and screen context, built with PyQt6.
+A floating, always-on-top mini-app for seamless OpenAI GPT interaction via voice, text, and screen context, built with PyQt6.
 
 ## Overview
 
-Sidekick is a lightweight desktop application built on PyQt6, designed to stay on top of your other windows for quick access to OpenAI's GPT capabilities. It supports both voice and text prompts, and can capture screen content as context, making AI assistance just a click or voice command away.
+Sidekick is a compact desktop application built with PyQt6 that stays above all other windows for instant access to OpenAI's GPT models. You can interact using your voice (hold-to-talk), type prompts, or add context from your clipboard or a screenshot. Sidekick is designed for quick, context-rich AI assistance with minimal distraction.
 
 ## Features
 
-- **Always-on-top Qt window** - Remains visible above other applications
-- **Voice input** - Speak your prompts using your microphone
-- **Text input** - Type prompts directly in the interface
-- **Screen capture integration** - Seamlessly grab screen content for context
-- **OpenAI GPT integration** - Direct access to GPT models via API
-- **Minimal footprint** - Lightweight, responsive, and non-intrusive
-- **Quick access** - Global hotkey support for instant activation
+- **Always-on-top window** – Stays visible above all other apps for quick access
+- **Voice input (hold-to-talk)** – Hold the "Talk" button to record and transcribe your prompt
+- **Text input** – Type prompts directly into the interface
+- **Clipboard and screenshot context** – Instantly add clipboard text or capture a screenshot as context for your prompt
+- **OpenAI GPT integration** – Sends your prompt and context to GPT and displays the reply
+- **Copy and Read Aloud** – Copy GPT's reply or have it read aloud with TTS
+- **Animated expand/collapse UI** – Switch between compact and expanded modes with smooth animations
+- **Conversation history** – Saves your conversation for later reference
+- **Minimal, responsive design** – Lightweight and non-intrusive, optimized for fast workflow
 
 ## Installation
 

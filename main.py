@@ -609,6 +609,7 @@ class SidekickUI(QWidget):
                     widget.hide()
 
     def on_talk_button_pressed(self):
+        TTS.clear()
         self.talk_button.setText("Listening...")
         self.audio_fs = 16000  # Sample rate
         self.audio_recording = True

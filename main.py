@@ -13,7 +13,12 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QComboBox,
     QFileDialog,
+    QMenuBar,
+    QMenu,
 )
+
+from PyQt6.QtGui import QAction
+
 from PyQt6.QtCore import (
     Qt,
     QPropertyAnimation,
@@ -39,6 +44,8 @@ import numpy as np
 import threading
 import tempfile
 import wave
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 
 class PromptInputEventFilter(QObject):
@@ -206,7 +213,7 @@ class SidekickUI(QWidget):
         # GPT reply display
         self.reply_display = QTextEdit()
         self.reply_display.setReadOnly(True)
-        self.reply_display.setPlaceholderText("SideKick is thinking...")
+        self.reply_display.setPlaceholderText("SideKick is reply here...")
 
         # Options: radio buttons, copy, read
         options_layout = QVBoxLayout()
@@ -285,6 +292,13 @@ class SidekickUI(QWidget):
 
         self.setLayout(main_layout)
         self.set_app_start_mode()
+        if not OPENAI_API_KEY:
+            if not self.expand_at_start:
+                self.on_expand_button_toggle()
+
+            self.status_bar.setText("No OpenAI API Key! App disabled!")
+            self.status_bar.setStyleSheet("color: red")
+            self.setEnabled(False)
 
     def on_send_button_clicked(self):
         """
@@ -586,11 +600,11 @@ class SidekickUI(QWidget):
 
         # Re-enable UI when all animations finish
         def _on_anims_finished():
-            self.setEnabled(True)
             self.activateWindow()
             QApplication.processEvents()
             # Ensure pending events are processed post-animation
             QTimer.singleShot(0, QApplication.processEvents)
+            QTimer.singleShot(10, self.prompt_input.setFocus)
 
         self.anim_group.finished.connect(_on_anims_finished)
         self.anim_group.start()

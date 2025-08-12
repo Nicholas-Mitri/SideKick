@@ -105,20 +105,24 @@ def chat_with_gpt5_stream(
                     continue
                 t = obj.get("type")
                 # Yield text deltas as they arrive
+                print(t)
                 if t == "response.output_text.delta":
                     # Depending on provider schema, text might be in obj["delta"]["text"] or obj["output_text"]["delta"]
                     delta = obj.get("delta", {})
                     if delta:
                         if len(delta) < 30:
                             streaming_reply += delta
-                            print(delta)
                             if UI_object is not None:
                                 UI_object.reply_display.setPlainText(streaming_reply)
                                 QApplication.processEvents()
                                 if UI_object.auto_read and not UI_object.websearch:
                                     partial_transciption += delta
+                                    print(
+                                        f"Partial transcription: {partial_transciption}"
+                                    )
                                     if (
-                                        streaming_reply[-1] in [".", "!", "?"]
+                                        partial_transciption[-1]
+                                        in [".", "!", "?", "\n"]
                                         and len(partial_transciption) > 20
                                     ):
                                         # Look back up to the last 20 characters for a sentence end
@@ -126,14 +130,12 @@ def chat_with_gpt5_stream(
                                         # Regex: match . ! or ? not preceded and followed by a digit (not part of a number)
                                         # and followed by space or end of string
                                         match = re.search(
-                                            r"(?<!\d)([.!?])(?!\d)(\s|$)", last_few
+                                            r"(?<!\d)([.!?])(?!\d)(?:\s|$)", last_few
                                         )
                                         if match:
                                             # whenever you have a partial_transcription (or a completed sentence)
+
                                             tts_enqueue(partial_transciption)
-                                            print(
-                                                f"End of sentence detected in {last_few}"
-                                            )
                                             partial_transciption = ""
                         else:
                             if not citations.get(delta, 0):
@@ -159,13 +161,15 @@ def chat_with_gpt5_stream(
 
                 elif t == "response.output_text.done":
                     if UI_object.websearch:
-                        # print(citations)
+
                         UI_object.reply_display.setPlainText(
                             format_web_reply(streaming_reply, citations)
                         )
                         QApplication.processEvents()
 
                         asyncio.run(TTS.speak_async(streaming_reply))
+                    else:
+                        tts_enqueue(partial_transciption)
                     break
 
 

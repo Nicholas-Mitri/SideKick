@@ -612,7 +612,11 @@ class SidekickUI(QWidget):
             QApplication.processEvents()
             # Ensure pending events are processed post-animation
             QTimer.singleShot(0, QApplication.processEvents)
-            QTimer.singleShot(10, self.prompt_input.setFocus)
+            (
+                QTimer.singleShot(10, self.prompt_input.setFocus)
+                if self.expand_at_start
+                else QTimer.singleShot(10, self.talk_button.setFocus)
+            )
 
         self.anim_group.finished.connect(_on_anims_finished)
         self.anim_group.start()

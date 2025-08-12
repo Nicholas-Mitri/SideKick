@@ -1,27 +1,30 @@
-# Sidekick
+# Sidekick (macOS Only)
 
 A floating, always-on-top mini-app for seamless OpenAI GPT interaction via voice, text, and screen context, built with PyQt6.
 
+> **Note:** Sidekick currently supports **macOS only**. Some features (such as screenshot and clipboard integration) are implemented specifically for macOS APIs.
+
 ## Overview
 
-Sidekick is a compact desktop application built with PyQt6 that stays above all other windows for instant access to OpenAI's GPT models. You can interact using your voice (hold-to-talk), type prompts, or add context from your clipboard or a screenshot. Sidekick is designed for quick, context-rich AI assistance with minimal distraction.
+Sidekick is a compact desktop application for macOS, built with PyQt6, that stays above all other windows for instant access to OpenAI's GPT models. You can interact using your voice (hold-to-talk), type prompts, or add context from your clipboard or a screenshot. Sidekick is designed for quick, context-rich AI assistance with minimal distraction.
 
 ## Features
 
-- **Always-on-top window** – Stays visible above all other apps for quick access
+- **Always-on-top window** – Stays visible above all other apps for quick access (macOS only)
 - **Voice input (hold-to-talk)** – Hold the "Talk" button to record and transcribe your prompt
 - **Text input** – Type prompts directly into the interface
-- **Clipboard and screenshot context** – Instantly add clipboard text or capture a screenshot as context for your prompt
+- **Clipboard and screenshot context** – Instantly add clipboard text or capture a screenshot as context for your prompt (macOS only)
 - **OpenAI GPT integration** – Sends your prompt and context to GPT and displays the reply
 - **Copy and Read Aloud** – Copy GPT's reply or have it read aloud with TTS
 - **Animated expand/collapse UI** – Switch between compact and expanded modes with smooth animations
 - **Conversation history** – Save/load your conversation for later reference
 - **Minimal, responsive design** – Lightweight and non-intrusive, optimized for fast workflow
 
-## Installation
+## Installation (macOS)
 
 ### Prerequisites
 
+- macOS 12.0 or higher
 - Python 3.8 or higher
 - OpenAI API key
 - Microphone access (for voice input)
@@ -40,8 +43,8 @@ Sidekick is a compact desktop application built with PyQt6 that stays above all 
 2. (Optional but recommended) Create and activate a virtual environment:
 
    ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows use: .venv\Scripts\activate
+   python3 -m venv .venv
+   source .venv/bin/activate
    ```
 
 3. Install the required dependencies:
@@ -53,7 +56,7 @@ Sidekick is a compact desktop application built with PyQt6 that stays above all 
 4. Set your OpenAI API key as an environment variable:
 
    ```bash
-   export OPENAI_API_KEY=your-api-key-here  # On Windows use: set OPENAI_API_KEY=your-api-key-here
+   export OPENAI_API_KEY=your-api-key-here
    ```
 
 5. Run the application:
@@ -61,3 +64,5 @@ Sidekick is a compact desktop application built with PyQt6 that stays above all 
    ```bash
    python main.py
    ```
+
+> **Note:** Sidekick is not tested or supported on Windows or Linux at this time. Some features may not work outside of macOS.

@@ -32,6 +32,7 @@ import openai
 import os
 import json
 import pygame
+import time
 
 import sounddevice as sd
 import numpy as np
@@ -270,6 +271,14 @@ class SidekickUI(QWidget):
         self.exit_button.clicked.connect(self.clear_and_exit)
         exit_layout.addWidget(self.exit_button)
         main_layout.addLayout(exit_layout)
+        # INSERT_YOUR_CODE
+        # Add a status bar at the bottom of the main layout
+        self.status_bar = QLabel("Ready")
+        self.status_bar.setStyleSheet("color: gray; padding: 2px 6px;")
+        self.status_bar.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        main_layout.addWidget(self.status_bar)
 
         self.setLayout(main_layout)
         self.set_app_start_mode()
@@ -371,6 +380,10 @@ class SidekickUI(QWidget):
             print(f"Audio playing: {is_playing}")
         except Exception as e:
             print(f"Error checking audio playback: {e}")
+            self.status_bar.setStyleSheet("color: red;")
+            self.status_bar.setText("Error checking audio playback")
+            QTimer.singleShot(3000, self.clear_status_bar)
+            return
 
         if not is_playing:
             """Read the reply text aloud using TTS."""
@@ -446,6 +459,9 @@ class SidekickUI(QWidget):
                     )
             except Exception as e:
                 print(f"Error loading conversation: {e}")
+                self.status_bar.setStyleSheet("color: red;")
+                self.status_bar.setText("Error Loading Conversation")
+                QTimer.singleShot(3000, self.clear_status_bar)
 
     def on_expand_button_toggle(self):
         """
@@ -573,6 +589,7 @@ class SidekickUI(QWidget):
         def _on_anims_finished():
             self.setEnabled(True)
             self.activateWindow()
+            QApplication.processEvents()
             # Ensure pending events are processed post-animation
             QTimer.singleShot(0, QApplication.processEvents)
 
@@ -647,6 +664,29 @@ class SidekickUI(QWidget):
                 audio_data = np.concatenate(self.audio_frames, axis=0)
             except Exception as e:
                 print(f"Error combining audio frames: {e}")
+                self.status_bar.setStyleSheet("color: red;")
+                self.status_bar.setText("Error Recording")
+                QTimer.singleShot(3000, self.clear_status_bar)
+
+                self.talk_button.setStyleSheet(
+                    """
+                QPushButton {
+                    border-radius: 10px;
+                    color: white;
+                    background-color: #3498db;
+                    padding: 6px 10px;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+                QPushButton:pressed {
+                    background-color: #e74c3c; /* Record button red on press */
+                    color: white; /* White text for contrast */
+                }
+                """
+                )
+                self.clean_last_audio_tempfile()
+                self.talk_button.setText("Talk (Hold)")
                 return
 
             print(f"Recorded {len(audio_data)} samples.")
@@ -697,6 +737,9 @@ class SidekickUI(QWidget):
                 self.last_audio_wav_path = None
             except Exception as e:
                 print(f"Error deleting tempfile: {e}")
+
+    def clear_status_bar(self):
+        self.status_bar.setText("")
 
     def on_websearch_state_changed(self, state):
         self.websearch = state == Qt.CheckState.Checked.value

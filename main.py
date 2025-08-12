@@ -73,9 +73,10 @@ class SidekickUI(QWidget):
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
 
         # Initialize SidekickUI state variables
+        self.clipboard = False
+        self.screeshot = False
         self.websearch = False
         self.auto_read = True
-        self.auto_grab = False
         self.right_widget_width = 140
         self.expand_at_start = False
         self.talk_button_height_after_expand = 30
@@ -97,8 +98,11 @@ class SidekickUI(QWidget):
         # Set minimum app width
         self.setMinimumWidth(100)
         main_layout = QVBoxLayout()
+
         # --- Top Row: Talk and Expand Buttons ---
+
         talk_layout = QHBoxLayout()
+
         self.talk_button = QPushButton("Talk (Hold)")  # Hold to talk (voice input)
         self.talk_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.talk_button.pressed.connect(self.on_talk_button_pressed)
@@ -178,11 +182,6 @@ class SidekickUI(QWidget):
         self.send_button = QPushButton("Send")
         self.send_button.clicked.connect(self.on_send_button_clicked)
 
-        self.context_combo = QComboBox()
-        self.context_combo.addItems(["No Context", "Clipboard", "Screenshot"])
-        self.context_combo.setToolTip("Select context to add to your prompt")
-
-        right_layout.addWidget(self.context_combo)
         right_layout.addWidget(self.send_button)
 
         # Container for right_layout to control its size
@@ -213,12 +212,15 @@ class SidekickUI(QWidget):
         options_layout = QVBoxLayout()
         from PyQt6.QtWidgets import QCheckBox  # Ensure QCheckBox is imported
 
+        self.checkbox_clipboard = QCheckBox("Clipboard")
+        self.checkbox_clipboard.setChecked(self.clipboard)
+        self.checkbox_clipboard.stateChanged.connect(self.on_clipboard_state_changed)
+        self.checkbox_screenshot = QCheckBox("Screenshot")
+        self.checkbox_screenshot.setChecked(self.screeshot)
+        self.checkbox_screenshot.stateChanged.connect(self.on_screenshot_state_changed)
         self.checkbox_websearch = QCheckBox("Web Search")
         self.checkbox_websearch.setChecked(self.websearch)
         self.checkbox_websearch.stateChanged.connect(self.on_websearch_state_changed)
-        self.checkbox_autograb = QCheckBox("Auto-Grab")
-        self.checkbox_autograb.setChecked(self.auto_grab)
-        self.checkbox_autograb.stateChanged.connect(self.on_autograb_state_changed)
         self.checkbox_autoread = QCheckBox("Auto-Read")
         self.checkbox_autoread.setChecked(self.auto_read)
         self.checkbox_autoread.stateChanged.connect(self.on_autoread_state_changed)
@@ -229,8 +231,9 @@ class SidekickUI(QWidget):
         self.read_button = QPushButton("Read/Stop")
         self.read_button.clicked.connect(self.on_read_button_clicked)
 
+        options_layout.addWidget(self.checkbox_clipboard)
+        options_layout.addWidget(self.checkbox_screenshot)
         options_layout.addWidget(self.checkbox_websearch)
-        options_layout.addWidget(self.checkbox_autograb)
         options_layout.addWidget(self.checkbox_autoread)
         options_layout.addWidget(self.copy_reply_button)
         options_layout.addWidget(self.read_button)
@@ -313,8 +316,7 @@ class SidekickUI(QWidget):
         content = [{"type": "input_text", "text": prompt_text}]
 
         # Handle context selection: Screenshot or Clipboard
-        context_type = self.context_combo.currentText()
-        if context_type == "Screenshot" or self.auto_grab:
+        if self.screeshot:
             # Attach screenshot as context
             img_url = screen_grab.grab_area_interactive()
             if img_url:
@@ -326,7 +328,7 @@ class SidekickUI(QWidget):
                 content.append(openai.attach_image_message(img_url))
             # Clean up the temporary screenshot file
             screen_grab.cleanup_tempfile(img_url)
-        elif context_type == "Clipboard":
+        elif self.clipboard:
             # Attach clipboard text as context
             clipboard_text = clipboard.get_last_clipboard_text()
             if clipboard_text:
@@ -467,8 +469,6 @@ class SidekickUI(QWidget):
         """
         Toggle between expanded and compact UI modes with animations.
         """
-        # Disable UI while animations run to avoid clicks during geometry changes
-        self.setEnabled(False)
 
         # Stop any previous animations and start a new group
         if hasattr(self, "anim_group") and self.anim_group is not None:
@@ -485,7 +485,6 @@ class SidekickUI(QWidget):
             for widget in self.findChildren(QWidget):
                 if widget is not self.talk_button and widget is not self.expand_button:
                     widget.hide()
-
             # Animate talk_button to compact size
             self.talk_button.setSizePolicy(
                 QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
@@ -605,7 +604,10 @@ class SidekickUI(QWidget):
                 widget.show()
         else:
             for widget in self.findChildren(QWidget):
-                if widget is not self.talk_button and widget is not self.expand_button:
+                if widget not in [
+                    self.talk_button,
+                    self.expand_button,
+                ]:
                     widget.hide()
 
     def on_talk_button_pressed(self):
@@ -746,11 +748,14 @@ class SidekickUI(QWidget):
     def on_websearch_state_changed(self, state):
         self.websearch = state == Qt.CheckState.Checked.value
 
-    def on_autograb_state_changed(self, state):
-        self.auto_grab = state == Qt.CheckState.Checked.value
-
     def on_autoread_state_changed(self, state):
         self.auto_read = state == Qt.CheckState.Checked.value
+
+    def on_clipboard_state_changed(self, state):
+        self.clipboard = state == Qt.CheckState.Checked.value
+
+    def on_screenshot_state_changed(self, state):
+        self.screeshot = state == Qt.CheckState.Checked.value
 
     def clear_and_exit(self):
         self.clear_context()

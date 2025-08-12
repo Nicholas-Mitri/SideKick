@@ -105,7 +105,6 @@ def chat_with_gpt5_stream(
                     continue
                 t = obj.get("type")
                 # Yield text deltas as they arrive
-                print(obj)
                 if t == "response.output_text.delta":
                     # Depending on provider schema, text might be in obj["delta"]["text"] or obj["output_text"]["delta"]
                     delta = obj.get("delta", {})
@@ -156,7 +155,7 @@ def chat_with_gpt5_stream(
 
                 elif t == "response.output_text.done":
                     if UI_object.websearch:
-
+                        # print(citations)
                         UI_object.reply_display.setPlainText(
                             format_web_reply(streaming_reply, citations)
                         )

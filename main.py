@@ -1,24 +1,17 @@
-import sys, datetime
+import sys
+import datetime
 from PyQt6.QtWidgets import (
     QApplication,
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
-    QLineEdit,
     QTextEdit,
     QPushButton,
-    QRadioButton,
     QLabel,
     QSpacerItem,
     QSizePolicy,
-    QComboBox,
     QFileDialog,
-    QMenuBar,
-    QMenu,
 )
-
-from PyQt6.QtGui import QAction
-
 from PyQt6.QtCore import (
     Qt,
     QPropertyAnimation,
@@ -37,7 +30,6 @@ import openai
 import os
 import json
 import pygame
-import time
 
 import sounddevice as sd
 import numpy as np
@@ -49,11 +41,15 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 
 class PromptInputEventFilter(QObject):
+    """Event filter to handle Enter key in prompt input."""
+
     def __init__(self, parent):
+        """Initialize the event filter."""
         super().__init__(parent)
         self.parent = parent
 
     def eventFilter(self, obj, event):
+        """Intercept Enter key to trigger send if no modifiers."""
         if event.type() == QEvent.Type.KeyPress:
             if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 modifiers = QApplication.keyboardModifiers()
@@ -68,12 +64,15 @@ class PromptInputEventFilter(QObject):
                 ):
                     TTS.clear()
                     self.parent.on_send_button_clicked()
-                    return True  # suppress default
+                    return True  # Suppress default
         return False
 
 
 class SidekickUI(QWidget):
+    """Main UI class for the Sidekick application."""
+
     def __init__(self):
+        """Initialize the Sidekick UI and state."""
         super().__init__()
         self.setWindowTitle("Sidekick")
         # Keep the window always on top
@@ -101,24 +100,26 @@ class SidekickUI(QWidget):
         self.init_ui()
 
     def init_ui(self):
-
+        """Set up the UI layout and widgets."""
         # Set minimum app width
         self.setMinimumWidth(100)
         main_layout = QVBoxLayout()
 
         # --- Top Row: Talk and Expand Buttons ---
-
         talk_layout = QHBoxLayout()
 
-        self.talk_button = QPushButton("Talk (Hold)")  # Hold to talk (voice input)
+        # Talk button for voice input
+        self.talk_button = QPushButton("Talk (Hold)")
         self.talk_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.talk_button.pressed.connect(self.on_talk_button_pressed)
         self.talk_button.released.connect(self.on_talk_button_released)
 
+        # Expand/collapse button
         self.expand_button = QPushButton()
         self.expand_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.expand_button.clicked.connect(self.on_expand_button_toggle)
 
+        # Style for talk button
         self.talk_button.setStyleSheet(
             """
             QPushButton {
@@ -137,6 +138,7 @@ class SidekickUI(QWidget):
             """
         )
 
+        # Style for expand button
         self.expand_button.setStyleSheet(
             """
             QPushButton {
@@ -153,18 +155,16 @@ class SidekickUI(QWidget):
             }
             """
         )
+
+        # Set initial expand/collapse state
         if self.expand_at_start:
             self.expand_button.setFixedWidth(30)
             self.expand_button.setText("-")
-
         else:
             self.expand_button.setText("+")
-
             self.talk_button.setFixedSize(90, 60)
             self.expand_button.setFixedWidth(30)
-
             self.expand_button.setFixedHeight(self.talk_button.height())
-
             target_width = 180
             target_height = 100
             self.setMinimumSize(target_width, target_height)
@@ -181,6 +181,7 @@ class SidekickUI(QWidget):
         self.prompt_input = QTextEdit()
         self.prompt_input.setPlaceholderText("Type your prompt here...")
 
+        # Install event filter for Enter key
         self.prompt_input_event_filter = PromptInputEventFilter(self)
         self.prompt_input.installEventFilter(self.prompt_input_event_filter)
 
@@ -188,7 +189,6 @@ class SidekickUI(QWidget):
         right_layout = QVBoxLayout()
         self.send_button = QPushButton("Send")
         self.send_button.clicked.connect(self.on_send_button_clicked)
-
         right_layout.addWidget(self.send_button)
 
         # Container for right_layout to control its size
@@ -215,29 +215,39 @@ class SidekickUI(QWidget):
         self.reply_display.setReadOnly(True)
         self.reply_display.setPlaceholderText("SideKick is reply here...")
 
-        # Options: radio buttons, copy, read
+        # Options: checkboxes, copy, read
         options_layout = QVBoxLayout()
         from PyQt6.QtWidgets import QCheckBox  # Ensure QCheckBox is imported
 
+        # Clipboard context checkbox
         self.checkbox_clipboard = QCheckBox("Clipboard")
         self.checkbox_clipboard.setChecked(self.clipboard)
         self.checkbox_clipboard.stateChanged.connect(self.on_clipboard_state_changed)
+
+        # Screenshot context checkbox
         self.checkbox_screenshot = QCheckBox("Screenshot")
         self.checkbox_screenshot.setChecked(self.screeshot)
         self.checkbox_screenshot.stateChanged.connect(self.on_screenshot_state_changed)
+
+        # Web search context checkbox
         self.checkbox_websearch = QCheckBox("Web Search")
         self.checkbox_websearch.setChecked(self.websearch)
         self.checkbox_websearch.stateChanged.connect(self.on_websearch_state_changed)
+
+        # Auto-read reply checkbox
         self.checkbox_autoread = QCheckBox("Auto-Read")
         self.checkbox_autoread.setChecked(self.auto_read)
         self.checkbox_autoread.stateChanged.connect(self.on_autoread_state_changed)
 
+        # Copy reply button
         self.copy_reply_button = QPushButton("Copy")
         self.copy_reply_button.clicked.connect(self.on_copy_reply_button_clicked)
 
+        # Read/Stop TTS button
         self.read_button = QPushButton("Read/Stop")
         self.read_button.clicked.connect(self.on_read_button_clicked)
 
+        # Add all options to layout
         options_layout.addWidget(self.checkbox_clipboard)
         options_layout.addWidget(self.checkbox_screenshot)
         options_layout.addWidget(self.checkbox_websearch)
@@ -247,6 +257,7 @@ class SidekickUI(QWidget):
 
         reply_and_options_layout.addWidget(self.reply_display)
 
+        # Options widget container
         options_widget = QWidget()
         options_widget.setLayout(options_layout)
         options_widget.setFixedWidth(self.right_widget_width)
@@ -258,20 +269,24 @@ class SidekickUI(QWidget):
 
         # --- Exit Button Row ---
         exit_layout = QHBoxLayout()
+        # Load conversation button
         self.load_conversation_button = QPushButton("Load")
         self.load_conversation_button.clicked.connect(self.load_conversation)
         exit_layout.addWidget(self.load_conversation_button)
 
+        # Save conversation button
         self.save_conversation_button = QPushButton("Save")
         self.save_conversation_button.clicked.connect(self.save_conversation)
         exit_layout.addWidget(self.save_conversation_button)
 
+        # Clear context button
         self.clear_context_button = QPushButton(
             f"Clear Context ({len(self.context)-1})"
         )
         self.clear_context_button.clicked.connect(self.clear_context)
         exit_layout.addWidget(self.clear_context_button)
 
+        # Spacer and Exit button
         exit_layout.addSpacerItem(
             QSpacerItem(
                 40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
@@ -281,7 +296,7 @@ class SidekickUI(QWidget):
         self.exit_button.clicked.connect(self.clear_and_exit)
         exit_layout.addWidget(self.exit_button)
         main_layout.addLayout(exit_layout)
-        # INSERT_YOUR_CODE
+
         # Add a status bar at the bottom of the main layout
         self.status_bar = QLabel("Ready")
         self.status_bar.setStyleSheet("color: gray; padding: 2px 6px;")
@@ -292,20 +307,17 @@ class SidekickUI(QWidget):
 
         self.setLayout(main_layout)
         self.set_app_start_mode()
+
+        # Disable app if no OpenAI API key
         if not OPENAI_API_KEY:
             if not self.expand_at_start:
                 self.on_expand_button_toggle()
-
             self.status_bar.setText("No OpenAI API Key! App disabled!")
             self.status_bar.setStyleSheet("color: red")
             self.setEnabled(False)
 
     def on_send_button_clicked(self):
-        """
-        Handler for the Send button.
-        Gathers the prompt and context, sends to OpenAI, and displays the reply.
-        """
-
+        """Handle the Send button click event."""
         self.talk_button.setStyleSheet(
             """
             QPushButton {
@@ -390,6 +402,7 @@ class SidekickUI(QWidget):
         clipboard.set_clipboard_text(reply_text)
 
     def on_read_button_clicked(self):
+        """Read the reply text aloud or stop playback."""
         # Check if audio is currently playing using pygame.mixer
         try:
             is_playing = pygame.mixer.get_init() and pygame.mixer.music.get_busy()
@@ -402,10 +415,9 @@ class SidekickUI(QWidget):
             return
 
         if not is_playing:
-            """Read the reply text aloud using TTS."""
+            # Read the reply text aloud using TTS
             reply_text = self.reply_display.toPlainText()
             asyncio.run(TTS.speak_async(reply_text))
-
         else:
             # Stop audio playback if currently playing
             try:
@@ -413,7 +425,6 @@ class SidekickUI(QWidget):
                     pygame.mixer.music.stop()
                     TTS.clear()
                     print("Audio playback stopped.")
-
             except Exception as e:
                 print(f"Error stopping audio playback: {e}")
 
@@ -437,6 +448,7 @@ class SidekickUI(QWidget):
         self.clear_context_button.setText(f"Clear Context ({len(self.context)-1})")
 
     def save_conversation(self):
+        """Save the current conversation to a file."""
         # Show a Qt file save dialog to let the user choose where to save the readable text file
         default_dir = os.path.join(os.getcwd(), "conversations")
         if not os.path.exists(default_dir):
@@ -456,6 +468,7 @@ class SidekickUI(QWidget):
                 json.dump(self.context, f, ensure_ascii=False, indent=2)
 
     def load_conversation(self):
+        """Load a conversation from a file."""
         # Show a Qt file open dialog to let the user pick a conversation JSON file from the conversations folder
         default_dir = os.path.join(os.getcwd(), "conversations")
         if not os.path.exists(default_dir):
@@ -480,10 +493,7 @@ class SidekickUI(QWidget):
                 QTimer.singleShot(3000, self.clear_status_bar)
 
     def on_expand_button_toggle(self):
-        """
-        Toggle between expanded and compact UI modes with animations.
-        """
-
+        """Toggle between expanded and compact UI modes with animations."""
         # Stop any previous animations and start a new group
         if hasattr(self, "anim_group") and self.anim_group is not None:
             try:
@@ -548,9 +558,7 @@ class SidekickUI(QWidget):
             self.app_anim_w.setEndValue(target_width)
             self.app_anim_w.setEasingCurve(QEasingCurve.Type.OutCubic)
             self.anim_group.addAnimation(self.app_anim_w)
-
         else:
-
             # Expand UI
             self.expand_at_start = True
             self.expand_button.setText("-")
@@ -610,9 +618,7 @@ class SidekickUI(QWidget):
         self.anim_group.start()
 
     def set_app_start_mode(self):
-        """
-        Show or hide widgets based on the initial expand/collapse state.
-        """
+        """Show or hide widgets based on the initial expand/collapse state."""
         if self.expand_at_start:
             for widget in self.findChildren(QWidget):
                 widget.show()
@@ -625,6 +631,7 @@ class SidekickUI(QWidget):
                     widget.hide()
 
     def on_talk_button_pressed(self):
+        """Start recording audio for voice input."""
         TTS.clear()
         self.talk_button.setText("Listening...")
         self.audio_fs = 16000  # Sample rate
@@ -649,6 +656,7 @@ class SidekickUI(QWidget):
         self.audio_thread.start()
 
     def on_talk_button_released(self):
+        """Stop recording, transcribe audio, and send as prompt."""
         print("Talk button released")
         self.talk_button.setStyleSheet(
             """
@@ -743,9 +751,7 @@ class SidekickUI(QWidget):
             self.talk_button.setText("Talk (Hold)")
 
     def clean_last_audio_tempfile(self):
-        """
-        Delete the last temporary audio file if it exists.
-        """
+        """Delete the last temporary audio file if it exists."""
         if hasattr(self, "last_audio_wav_path") and self.last_audio_wav_path:
             try:
                 if os.path.exists(self.last_audio_wav_path):
@@ -756,22 +762,28 @@ class SidekickUI(QWidget):
                 print(f"Error deleting tempfile: {e}")
 
     def clear_status_bar(self):
+        """Reset the status bar to 'Ready'."""
         self.status_bar.setText("Ready")
         self.status_bar.setStyleSheet("color: grey;")
 
     def on_websearch_state_changed(self, state):
+        """Handle websearch checkbox state change."""
         self.websearch = state == Qt.CheckState.Checked.value
 
     def on_autoread_state_changed(self, state):
+        """Handle auto-read checkbox state change."""
         self.auto_read = state == Qt.CheckState.Checked.value
 
     def on_clipboard_state_changed(self, state):
+        """Handle clipboard checkbox state change."""
         self.clipboard = state == Qt.CheckState.Checked.value
 
     def on_screenshot_state_changed(self, state):
+        """Handle screenshot checkbox state change."""
         self.screeshot = state == Qt.CheckState.Checked.value
 
     def clear_and_exit(self):
+        """Clear context and exit the application."""
         self.clear_context()
         self.close()
 
@@ -784,6 +796,7 @@ class SidekickUI(QWidget):
 
 
 if __name__ == "__main__":
+    # Entry point for the application
     app = QApplication(sys.argv)
     window = SidekickUI()
     window.show()

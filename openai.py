@@ -105,7 +105,6 @@ def chat_with_gpt5_stream(
                     continue
                 t = obj.get("type")
                 # Yield text deltas as they arrive
-                print(t)
                 if t == "response.output_text.delta":
                     # Depending on provider schema, text might be in obj["delta"]["text"] or obj["output_text"]["delta"]
                     delta = obj.get("delta", {})
@@ -117,9 +116,6 @@ def chat_with_gpt5_stream(
                                 QApplication.processEvents()
                                 if UI_object.auto_read and not UI_object.websearch:
                                     partial_transciption += delta
-                                    print(
-                                        f"Partial transcription: {partial_transciption}"
-                                    )
                                     if (
                                         partial_transciption[-1]
                                         in [".", "!", "?", "\n"]

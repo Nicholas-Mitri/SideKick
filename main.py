@@ -190,7 +190,7 @@ class SidekickUI(QWidget):
     def init_ui(self):
         """Set up the UI layout and widgets."""
         # Set minimum app width
-        self.setMinimumWidth(100)
+        self.setMinimumWidth(120)
         main_layout = QVBoxLayout()
 
         # --- Top Row: Talk and Expand Buttons ---
@@ -251,14 +251,14 @@ class SidekickUI(QWidget):
 
         # Set initial expand/collapse state
         if self.expand_at_start:
-            self.expand_button.setFixedWidth(35)
+            self.expand_button.setFixedWidth(40)
             self.expand_button.setText("-")
         else:
             self.expand_button.setText("+")
             self.talk_button.setFixedSize(100, 60)
-            self.expand_button.setFixedWidth(35)
+            self.expand_button.setFixedWidth(40)
             self.expand_button.setFixedHeight(self.talk_button.height())
-            target_width = 180
+            target_width = 200
             target_height = 100
             self.setMinimumSize(target_width, target_height)
             self.resize(target_width, target_height)
@@ -617,7 +617,7 @@ class SidekickUI(QWidget):
             self.talk_button.setSizePolicy(
                 QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
             )
-            self.talk_button.setMaximumWidth(100)
+            self.talk_button.setMaximumWidth(120)
 
             self.anim_h = QPropertyAnimation(self.talk_button, b"minimumHeight")
             self.anim_h.setDuration(300)
@@ -645,7 +645,7 @@ class SidekickUI(QWidget):
             self.setSizePolicy(
                 QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
             )
-            target_width = 180
+            target_width = 200
             target_height = 100
             self.setMinimumSize(target_width, target_height)
 

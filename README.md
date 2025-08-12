@@ -33,7 +33,7 @@ Sidekick is a compact desktop application built with PyQt6 that stays above all 
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/yourusername/sidekick.git
+   git clone https://github.com/Nicholas-Mitri/SideKick
    cd sidekick
    ```
 

@@ -78,6 +78,94 @@ class SidekickUI(QWidget):
         # Keep the window always on top
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
 
+        # Set dark mode app-wide style to match button_dark_style, with more padding and smaller font
+
+        self.setStyleSheet(
+            """
+            QWidget {
+                background-color: #23272e;
+                color: #f2f2f2;
+                font-size: 14px;
+                border: none;
+            }
+            QVBoxLayout, QHBoxLayout {
+                background: transparent;
+            }
+            QTextEdit {
+                background-color: #2a2e36;  /* Slightly brighter than #23272e */
+                border: 1.5px solid #3a4250;
+                border-radius: 12px;
+                padding: 10px;
+                font-size: 14px;
+                color: #f7f9fa;
+                selection-background-color: #2d3a4a;
+            }
+
+            QLabel {
+                color: #f2f2f2;
+                font-size: 14px;
+            }
+            QCheckBox {
+                color: #f2f2f2;
+                font-size: 14px;
+                spacing: 8px;
+                padding: 2px 0 2px 0;
+                background-color: #23272e;
+            }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+                border-radius: 4px;
+                border: 1px solid #444a58;
+                background: #2a2e36;
+            }
+            QCheckBox::indicator:checked {
+                background: #3498db;
+                border: 1px solid #5a5f6e;
+            }
+            QCheckBox::indicator:unchecked {
+                background: #2a2e36;
+                border: 1px solid #444a58;
+            }
+            QPushButton {
+                border-radius: 10px;
+                color: #f2f2f2;
+                background-color: #2a2e36;
+                padding: 5px 9px;
+                border: 1px solid #444a58;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background-color: #31343b;
+                border: 1px solid #5a5f6e;
+            }
+            QPushButton:pressed {
+                background-color: #1a1d22;
+                border: 1px solid #7b7f8a;
+            }
+            QPushButton:disabled {
+                background-color: #2a2e36;
+                color: #888;
+                border: 1px solid #333;
+            }
+            QScrollBar:vertical, QScrollBar:horizontal {
+                background: #23272e;
+                border: none;
+                width: 10px;
+                margin: 0px 0px 0px 0px;
+            }
+            QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
+                background: #444a58;
+                border-radius: 5px;
+                min-height: 20px;
+            }
+            QScrollBar::add-line, QScrollBar::sub-line {
+                background: none;
+                border: none;
+            }
+        """
+        )
+
         # Initialize SidekickUI state variables
         self.clipboard = False
         self.screeshot = False
@@ -85,7 +173,7 @@ class SidekickUI(QWidget):
         self.auto_read = True
         self.right_widget_width = 140
         self.expand_at_start = False
-        self.talk_button_height_after_expand = 30
+        self.talk_button_height_after_expand = 35
         self.context = [
             {
                 "role": "system",
@@ -119,6 +207,8 @@ class SidekickUI(QWidget):
         self.expand_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.expand_button.clicked.connect(self.on_expand_button_toggle)
 
+        # Set default modern dark mode styling for all buttons
+
         # Style for talk button
         self.talk_button.setStyleSheet(
             """
@@ -126,7 +216,8 @@ class SidekickUI(QWidget):
                 border-radius: 10px;
                 color: white;
                 background-color: #3498db;
-                padding: 6px 10px;
+                padding: 6px 14px;
+                font-size: 13px;
             }
             QPushButton:hover {
                 background-color: #2980b9;
@@ -145,7 +236,9 @@ class SidekickUI(QWidget):
                 border-radius: 10px;
                 color: white;
                 background-color: #3498db;
-                padding: 6px 10px;
+                padding: 6px 14px;
+                font-size: 13px;
+
             }
             QPushButton:hover {
                 background-color: #2980b9;
@@ -158,12 +251,12 @@ class SidekickUI(QWidget):
 
         # Set initial expand/collapse state
         if self.expand_at_start:
-            self.expand_button.setFixedWidth(30)
+            self.expand_button.setFixedWidth(35)
             self.expand_button.setText("-")
         else:
             self.expand_button.setText("+")
-            self.talk_button.setFixedSize(90, 60)
-            self.expand_button.setFixedWidth(30)
+            self.talk_button.setFixedSize(100, 60)
+            self.expand_button.setFixedWidth(35)
             self.expand_button.setFixedHeight(self.talk_button.height())
             target_width = 180
             target_height = 100
@@ -180,6 +273,7 @@ class SidekickUI(QWidget):
         # Left: Prompt input field
         self.prompt_input = QTextEdit()
         self.prompt_input.setPlaceholderText("Type your prompt here...")
+        # Style is now set app-wide
 
         # Install event filter for Enter key
         self.prompt_input_event_filter = PromptInputEventFilter(self)
@@ -214,6 +308,7 @@ class SidekickUI(QWidget):
         self.reply_display = QTextEdit()
         self.reply_display.setReadOnly(True)
         self.reply_display.setPlaceholderText("SideKick is reply here...")
+        # Style is now set app-wide
 
         # Options: checkboxes, copy, read
         options_layout = QVBoxLayout()
@@ -261,41 +356,46 @@ class SidekickUI(QWidget):
         options_widget = QWidget()
         options_widget.setLayout(options_layout)
         options_widget.setFixedWidth(self.right_widget_width)
-        options_widget.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        options_widget.setFixedHeight(self.reply_display.sizeHint().height())
+        options_widget.setSizePolicy(
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding
+        )
         reply_and_options_layout.addWidget(options_widget)
 
         main_layout.addLayout(reply_and_options_layout)
 
         # --- Exit Button Row ---
-        exit_layout = QHBoxLayout()
+        context_options_layout = QHBoxLayout()
         # Load conversation button
         self.load_conversation_button = QPushButton("Load")
         self.load_conversation_button.clicked.connect(self.load_conversation)
-        exit_layout.addWidget(self.load_conversation_button)
+        context_options_layout.addWidget(self.load_conversation_button)
 
         # Save conversation button
         self.save_conversation_button = QPushButton("Save")
         self.save_conversation_button.clicked.connect(self.save_conversation)
-        exit_layout.addWidget(self.save_conversation_button)
+        context_options_layout.addWidget(self.save_conversation_button)
 
         # Clear context button
         self.clear_context_button = QPushButton(
             f"Clear Context ({len(self.context)-1})"
         )
         self.clear_context_button.clicked.connect(self.clear_context)
-        exit_layout.addWidget(self.clear_context_button)
+
+        context_options_layout.addWidget(self.clear_context_button)
 
         # Spacer and Exit button
-        exit_layout.addSpacerItem(
+        context_options_layout.addSpacerItem(
             QSpacerItem(
                 40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
             )
         )
+        main_layout.addLayout(context_options_layout)
+
+        # Exit button
+        exit_layout = QHBoxLayout()
         self.exit_button = QPushButton("Exit")
         self.exit_button.clicked.connect(self.clear_and_exit)
-        exit_layout.addWidget(self.exit_button)
-        main_layout.addLayout(exit_layout)
+        self.exit_button.setFixedWidth(80)
 
         # Add a status bar at the bottom of the main layout
         self.status_bar = QLabel("Ready")
@@ -303,7 +403,9 @@ class SidekickUI(QWidget):
         self.status_bar.setAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
-        main_layout.addWidget(self.status_bar)
+        exit_layout.addWidget(self.status_bar)
+        exit_layout.addWidget(self.exit_button)
+        main_layout.addLayout(exit_layout)
 
         self.setLayout(main_layout)
         self.set_app_start_mode()
@@ -324,7 +426,8 @@ class SidekickUI(QWidget):
                 border-radius: 10px;
                 color: white;
                 background-color:  #27ae60;
-                padding: 6px 10px;
+                padding: 6px 14px;
+                font-size: 13px;
             }
             QPushButton:hover {
                 background-color:  #27ae60;
@@ -382,7 +485,8 @@ class SidekickUI(QWidget):
                 border-radius: 10px;
                 color: white;
                 background-color: #3498db;
-                padding: 6px 10px;
+                padding: 6px 14px;
+                font-size: 13px;
             }
             QPushButton:hover {
                 background-color: #2980b9;
@@ -513,7 +617,7 @@ class SidekickUI(QWidget):
             self.talk_button.setSizePolicy(
                 QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
             )
-            self.talk_button.setMaximumWidth(90)
+            self.talk_button.setMaximumWidth(100)
 
             self.anim_h = QPropertyAnimation(self.talk_button, b"minimumHeight")
             self.anim_h.setDuration(300)
@@ -525,7 +629,7 @@ class SidekickUI(QWidget):
             self.anim_w = QPropertyAnimation(self.talk_button, b"minimumWidth")
             self.anim_w.setDuration(300)
             self.anim_w.setStartValue(self.talk_button.width())
-            self.anim_w.setEndValue(90)
+            self.anim_w.setEndValue(100)
             self.anim_w.setEasingCurve(QEasingCurve.Type.OutCubic)
             self.anim_group.addAnimation(self.anim_w)
 
@@ -668,7 +772,8 @@ class SidekickUI(QWidget):
                 border-radius: 10px;
                 color: white;
                 background-color:  #27ae60;
-                padding: 6px 10px;
+                padding: 10px 18px;
+                font-size: 13px;
             }
             QPushButton:hover {
                 background-color:  #27ae60;
@@ -703,7 +808,8 @@ class SidekickUI(QWidget):
                     border-radius: 10px;
                     color: white;
                     background-color: #3498db;
-                    padding: 6px 10px;
+                    padding: 10px 18px;
+                    font-size: 13px;
                 }
                 QPushButton:hover {
                     background-color: #2980b9;
@@ -740,7 +846,8 @@ class SidekickUI(QWidget):
                     border-radius: 10px;
                     color: white;
                     background-color: #3498db;
-                    padding: 6px 10px;
+                    padding: 10px 18px;
+                    font-size: 13px;
                 }
                 QPushButton:hover {
                     background-color: #2980b9;
@@ -803,5 +910,19 @@ if __name__ == "__main__":
     # Entry point for the application
     app = QApplication(sys.argv)
     window = SidekickUI()
+    window.show()
+    sys.exit(app.exec())
+    window.show()
+    sys.exit(app.exec())
+    window.show()
+    sys.exit(app.exec())
+    window.show()
+    sys.exit(app.exec())
+    window.show()
+    sys.exit(app.exec())
+    window.show()
+    sys.exit(app.exec())
+    window.show()
+    sys.exit(app.exec())
     window.show()
     sys.exit(app.exec())

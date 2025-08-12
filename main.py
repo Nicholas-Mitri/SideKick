@@ -1,4 +1,4 @@
-import sys
+import sys, datetime
 from PyQt6.QtWidgets import (
     QApplication,
     QWidget,
@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QSpacerItem,
     QSizePolicy,
     QComboBox,
+    QFileDialog,
 )
 from PyQt6.QtCore import (
     Qt,
@@ -68,39 +69,7 @@ class SidekickUI(QWidget):
         self.setWindowTitle("Sidekick")
         # Keep the window always on top
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-        self.init_ui()
 
-        conversation_path = "conversations/conversation.json"
-        if os.path.exists(conversation_path):
-            with open(conversation_path, "r", encoding="utf-8") as f:
-                try:
-                    self.context = json.load(f)
-                except json.JSONDecodeError:
-                    self.context = [
-                        {
-                            "role": "system",
-                            "content": [
-                                {
-                                    "type": "input_text",
-                                    "text": "very brief to the point answers only.",
-                                }
-                            ],
-                        }
-                    ]
-        else:
-            self.context = [
-                {
-                    "role": "system",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": "very brief to the point answers only.",
-                        }
-                    ],
-                }
-            ]
-
-    def init_ui(self):
         # Initialize SidekickUI state variables
         self.websearch = False
         self.auto_read = True
@@ -108,6 +77,20 @@ class SidekickUI(QWidget):
         self.right_widget_width = 140
         self.expand_at_start = False
         self.talk_button_height_after_expand = 30
+        self.context = [
+            {
+                "role": "system",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": f"{self.read_system_prompt()}",
+                    }
+                ],
+            }
+        ]
+        self.init_ui()
+
+    def init_ui(self):
 
         # Set minimum app width
         self.setMinimumWidth(100)
@@ -222,7 +205,7 @@ class SidekickUI(QWidget):
         # GPT reply display
         self.reply_display = QTextEdit()
         self.reply_display.setReadOnly(True)
-        self.reply_display.setPlaceholderText("GPT reply will appear here...")
+        self.reply_display.setPlaceholderText("SideKick is thinking...")
 
         # Options: radio buttons, copy, read
         options_layout = QVBoxLayout()
@@ -266,13 +249,27 @@ class SidekickUI(QWidget):
 
         # --- Exit Button Row ---
         exit_layout = QHBoxLayout()
+        self.load_conversation_button = QPushButton("Load")
+        self.load_conversation_button.clicked.connect(self.load_conversation)
+        exit_layout.addWidget(self.load_conversation_button)
+
+        self.save_conversation_button = QPushButton("Save")
+        self.save_conversation_button.clicked.connect(self.save_conversation)
+        exit_layout.addWidget(self.save_conversation_button)
+
+        self.clear_context_button = QPushButton(
+            f"Clear Context ({len(self.context)-1})"
+        )
+        self.clear_context_button.clicked.connect(self.clear_context)
+        exit_layout.addWidget(self.clear_context_button)
+
         exit_layout.addSpacerItem(
             QSpacerItem(
                 40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
             )
         )
-        self.exit_button = QPushButton("Exit App")
-        self.exit_button.clicked.connect(self.save_conversation)
+        self.exit_button = QPushButton("Exit")
+        self.exit_button.clicked.connect(self.clear_and_exit)
         exit_layout.addWidget(self.exit_button)
         main_layout.addLayout(exit_layout)
 
@@ -320,6 +317,8 @@ class SidekickUI(QWidget):
                 "content": [{"type": "output_text", "text": f"{reply}"}],
             }
         )
+        self.clear_context_button.setText(f"Clear Context ({len(self.context)-1})")
+        self.prompt_input.clear()
 
     def on_copy_reply_button_clicked(self):
         """Copy the reply text to the clipboard."""
@@ -353,17 +352,58 @@ class SidekickUI(QWidget):
 
     def clear_context(self):
         """Clear the conversation context."""
-        self.context = []
+        self.context = [
+            {
+                "role": "system",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": f"{self.read_system_prompt()}",
+                    }
+                ],
+            }
+        ]
+        self.clear_context_button.setText(f"Clear Context ({len(self.context)-1})")
 
     def save_conversation(self):
-        """Save the conversation to a readable text file and a JSON file."""
-        with open("conversation_readable.txt", "w") as f:
-            for message in self.context:
-                f.write(f"{message['role']}: {message['content']}\n")
-            f.write("\n")
+        # Show a Qt file save dialog to let the user choose where to save the readable text file
+        default_dir = os.path.join(os.getcwd(), "conversations")
+        if not os.path.exists(default_dir):
+            os.makedirs(default_dir)
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Conversation As",
+            os.path.join(
+                default_dir,
+                f"conversation_{datetime.datetime.now().strftime('%Y-%m-%d')}.json",
+            ),
+            "JSON Files (*.json)",
+        )
+        print(file_path)
+        if file_path:
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(self.context, f, ensure_ascii=False, indent=2)
 
-        with open("conversations/conversation.json", "w", encoding="utf-8") as f:
-            json.dump(self.context, f, ensure_ascii=False, indent=2)
+    def load_conversation(self):
+        # Show a Qt file open dialog to let the user pick a conversation JSON file from the conversations folder
+        default_dir = os.path.join(os.getcwd(), "conversations")
+        if not os.path.exists(default_dir):
+            os.makedirs(default_dir)
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load Conversation",
+            default_dir,
+            "JSON Files (*.json)",
+        )
+        if file_path:
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    self.context = json.load(f)
+                    self.clear_context_button.setText(
+                        f"Clear Context ({len(self.context)})"
+                    )
+            except Exception as e:
+                print(f"Error loading conversation: {e}")
 
     def on_expand_button_toggle(self):
         """
@@ -624,6 +664,17 @@ class SidekickUI(QWidget):
 
     def on_autoread_state_changed(self, state):
         self.auto_read = state == Qt.CheckState.Checked.value
+
+    def clear_and_exit(self):
+        self.clear_context()
+        self.close()
+
+    def read_system_prompt(self):
+        """Read the system prompt from a file."""
+        if not os.path.exists("system_prompt.txt"):
+            return ""
+        with open("system_prompt.txt", "r") as f:
+            return f.read()
 
 
 if __name__ == "__main__":

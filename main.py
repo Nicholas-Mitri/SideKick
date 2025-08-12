@@ -224,10 +224,7 @@ class SidekickUI(QWidget):
         self.copy_reply_button = QPushButton("Copy")
         self.copy_reply_button.clicked.connect(self.on_copy_reply_button_clicked)
 
-        self.read_button = QPushButton("Read")
-        self.read_button.clicked.connect(self.on_read_button_clicked)
-
-        self.stop_button = QPushButton("Read")
+        self.read_button = QPushButton("Read/Stop")
         self.read_button.clicked.connect(self.on_read_button_clicked)
 
         options_layout.addWidget(self.checkbox_websearch)
@@ -281,6 +278,27 @@ class SidekickUI(QWidget):
         Handler for the Send button.
         Gathers the prompt and context, sends to OpenAI, and displays the reply.
         """
+
+        self.talk_button.setStyleSheet(
+            """
+            QPushButton {
+                border-radius: 10px;
+                color: white;
+                background-color:  #27ae60;
+                padding: 6px 10px;
+            }
+            QPushButton:hover {
+                background-color:  #27ae60;
+            }
+            QPushButton:pressed {
+                background-color: #27ae60;
+            }
+            """
+        )
+        self.talk_button.setText("Thinking...")
+        self.talk_button.repaint()
+        QApplication.processEvents()
+        print("Sending prompt...")
         prompt_text = self.prompt_input.toPlainText()
         content = [{"type": "input_text", "text": prompt_text}]
 
@@ -320,6 +338,26 @@ class SidekickUI(QWidget):
         self.clear_context_button.setText(f"Clear Context ({len(self.context)-1})")
         self.prompt_input.clear()
 
+        self.talk_button.setStyleSheet(
+            """
+            QPushButton {
+                border-radius: 10px;
+                color: white;
+                background-color: #3498db;
+                padding: 6px 10px;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+            QPushButton:pressed {
+                background-color: #e74c3c; /* Record button red on press */
+                color: white; /* White text for contrast */
+            }
+            """
+        )
+        self.talk_button.setText("Talk (Hold)")
+        self.talk_button.repaint()
+
     def on_copy_reply_button_clicked(self):
         """Copy the reply text to the clipboard."""
         reply_text = self.reply_display.toPlainText()
@@ -337,12 +375,15 @@ class SidekickUI(QWidget):
             """Read the reply text aloud using TTS."""
             reply_text = self.reply_display.toPlainText()
             asyncio.run(TTS.speak_async(reply_text))
+
         else:
             # Stop audio playback if currently playing
             try:
                 if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
                     pygame.mixer.music.stop()
+                    TTS.clear()
                     print("Audio playback stopped.")
+
             except Exception as e:
                 print(f"Error stopping audio playback: {e}")
 

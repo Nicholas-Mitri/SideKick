@@ -67,8 +67,7 @@ def chat_with_gpt5(
 def chat_with_gpt5_stream(
     messages,
     model="gpt-5-mini",  # May need to be "gpt-5-2025-08-07" or similar
-    tools=None,
-    tool_choice=None,
+    tools=[{"type": "web_search_preview"}],
     # New GPT-5 parameters
     reasoning=None,  # {"effort": "medium"},
     UI_object=None,
@@ -84,10 +83,8 @@ def chat_with_gpt5_stream(
     }
 
     # Existing parameters
-    if tools:
+    if tools and UI_object.websearch:
         payload["tools"] = tools
-    if tool_choice:
-        payload["tool_choice"] = tool_choice
 
     streaming_reply = ""
     partial_transciption = ""
@@ -105,7 +102,6 @@ def chat_with_gpt5_stream(
                 except Exception:
                     continue
                 t = obj.get("type")
-
                 # Yield text deltas as they arrive
                 if t == "response.output_text.delta":
                     # Depending on provider schema, text might be in obj["delta"]["text"] or obj["output_text"]["delta"]
@@ -209,7 +205,7 @@ if __name__ == "__main__":
             "content": [
                 {
                     "type": "input_text",
-                    "text": "What is the distance to the sun in different units",
+                    "text": "What is the distance to the sun in different units. include citations.",
                 }
             ],
         }

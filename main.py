@@ -58,6 +58,7 @@ class PromptInputEventFilter(QObject):
                         | Qt.KeyboardModifier.AltModifier
                     )
                 ):
+                    TTS.clear()
                     self.parent.on_send_button_clicked()
                     return True  # suppress default
         return False

@@ -93,7 +93,7 @@ class SidekickUI(QWidget):
             }
             QTextEdit {
                 background-color: #2a2e36;  /* Slightly brighter than #23272e */
-                border: 1.5px solid #3a4250;
+                border: 0px solid  #2a2e36;
                 border-radius: 12px;
                 padding: 10px;
                 font-size: 14px;
@@ -116,23 +116,23 @@ class SidekickUI(QWidget):
                 width: 18px;
                 height: 18px;
                 border-radius: 4px;
-                border: 1px solid #444a58;
+                border: 0px solid #444a58;
                 background: #2a2e36;
             }
             QCheckBox::indicator:checked {
                 background: #3498db;
-                border: 1px solid #5a5f6e;
+                border: 0px solid #5a5f6e;
             }
             QCheckBox::indicator:unchecked {
                 background: #2a2e36;
-                border: 1px solid #444a58;
+                border: 0px solid #444a58;
             }
             QPushButton {
                 border-radius: 10px;
                 color: #f2f2f2;
                 background-color: #2a2e36;
                 padding: 5px 9px;
-                border: 1px solid #444a58;
+                border: 0px solid #444a58;
                 font-size: 13px;
             }
             QPushButton:hover {
@@ -190,7 +190,6 @@ class SidekickUI(QWidget):
     def init_ui(self):
         """Set up the UI layout and widgets."""
         # Set minimum app width
-        self.setMinimumWidth(120)
         main_layout = QVBoxLayout()
 
         # --- Top Row: Talk and Expand Buttons ---
@@ -206,8 +205,6 @@ class SidekickUI(QWidget):
         self.expand_button = QPushButton()
         self.expand_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.expand_button.clicked.connect(self.on_expand_button_toggle)
-
-        # Set default modern dark mode styling for all buttons
 
         # Style for talk button
         self.talk_button.setStyleSheet(
@@ -253,6 +250,8 @@ class SidekickUI(QWidget):
         if self.expand_at_start:
             self.expand_button.setFixedWidth(40)
             self.expand_button.setText("-")
+            self.resize(700, 500)
+
         else:
             self.expand_button.setText("+")
             self.talk_button.setFixedSize(100, 60)
@@ -613,10 +612,7 @@ class SidekickUI(QWidget):
             for widget in self.findChildren(QWidget):
                 if widget is not self.talk_button and widget is not self.expand_button:
                     widget.hide()
-            # Animate talk_button to compact size
-            self.talk_button.setSizePolicy(
-                QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
-            )
+
             self.talk_button.setMaximumWidth(120)
 
             self.anim_h = QPropertyAnimation(self.talk_button, b"minimumHeight")
@@ -641,14 +637,9 @@ class SidekickUI(QWidget):
             self.anime_h.setEasingCurve(QEasingCurve.Type.OutCubic)
             self.anim_group.addAnimation(self.anime_h)
 
-            # Animate app to compact size
-            self.setSizePolicy(
-                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
-            )
             target_width = 200
             target_height = 100
-            self.setMinimumSize(target_width, target_height)
-
+            self.setMinimumSize(200, 100)
             self.app_anim_h = QPropertyAnimation(self, b"maximumHeight")
             self.app_anim_h.setDuration(300)
             self.app_anim_h.setStartValue(self.height())
@@ -690,11 +681,7 @@ class SidekickUI(QWidget):
             self.anime_h.setEasingCurve(QEasingCurve.Type.OutCubic)
             self.anim_group.addAnimation(self.anime_h)
 
-            # Remove app size limits and animate to expanded size
-            self.setMaximumSize(1000000, 1000000)
-            self.setSizePolicy(
-                QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
-            )
+            self.setMaximumSize(700, 500)
 
             self.app_anim_h = QPropertyAnimation(self, b"minimumHeight")
             self.app_anim_h.setDuration(300)
@@ -712,14 +699,16 @@ class SidekickUI(QWidget):
 
         # Re-enable UI when all animations finish
         def _on_anims_finished():
-            self.activateWindow()
-            QApplication.processEvents()
-            # Ensure pending events are processed post-animation
-            QTimer.singleShot(0, QApplication.processEvents)
+            self.activateWindow()  # Ensure pending events are processed post-animation
             (
                 QTimer.singleShot(10, self.prompt_input.setFocus)
                 if self.expand_at_start
                 else QTimer.singleShot(10, self.talk_button.setFocus)
+            )
+            (
+                QTimer.singleShot(0, lambda: self.setFixedSize(700, 500))
+                if self.expand_at_start
+                else QTimer.singleShot(0, lambda: self.setFixedSize(200, 100))
             )
 
         self.anim_group.finished.connect(_on_anims_finished)

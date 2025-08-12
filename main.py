@@ -739,7 +739,8 @@ class SidekickUI(QWidget):
                 print(f"Error deleting tempfile: {e}")
 
     def clear_status_bar(self):
-        self.status_bar.setText("")
+        self.status_bar.setText("Ready")
+        self.status_bar.setStyleSheet("color: grey;")
 
     def on_websearch_state_changed(self, state):
         self.websearch = state == Qt.CheckState.Checked.value

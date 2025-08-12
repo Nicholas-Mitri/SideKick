@@ -229,7 +229,9 @@ def transcribe_audio(
 
 
 def format_web_reply(reply, citations):
-    citation_block = "References:\n"
+    if len(citations) == 0:
+        return reply
+    citation_block = "Citations:\n"
     sorted_citations = sorted(citations.items(), key=lambda x: x[1]["order"])
     for c in sorted_citations:
         citation_block += f"[{c[1]['order']}]: ({c[1]['url']}) {c[1]['title']}\n"

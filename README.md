@@ -15,7 +15,7 @@ Sidekick is a compact desktop application built with PyQt6 that stays above all 
 - **OpenAI GPT integration** – Sends your prompt and context to GPT and displays the reply
 - **Copy and Read Aloud** – Copy GPT's reply or have it read aloud with TTS
 - **Animated expand/collapse UI** – Switch between compact and expanded modes with smooth animations
-- **Conversation history** – Saves your conversation for later reference
+- **Conversation history** – Save/load your conversation for later reference
 - **Minimal, responsive design** – Lightweight and non-intrusive, optimized for fast workflow
 
 ## Installation

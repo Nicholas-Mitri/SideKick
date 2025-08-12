@@ -457,8 +457,9 @@ class SidekickUI(QWidget):
 
     def on_send_button_clicked(self):
         """Handle the Send button click event."""
-        self.talk_button.setStyleSheet(
-            """
+        if self.expand_at_start:
+            self.talk_button.setStyleSheet(
+                """
             QPushButton {
                 border-radius: 10px;
                 color: white;
@@ -473,7 +474,25 @@ class SidekickUI(QWidget):
                 background-color: #27ae60;
             }
             """
-        )
+            )
+        else:
+            self.talk_button.setStyleSheet(
+                """
+            QPushButton {
+                border-radius: 20px;
+                color: white;
+                background-color:  #27ae60;
+                padding: 6px 14px;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background-color:  #27ae60;
+            }
+            QPushButton:pressed {
+                background-color: #27ae60;
+            }
+            """
+            )
         self.talk_button.setText("Thinking...")
         self.talk_button.repaint()
         QApplication.processEvents()
@@ -515,25 +534,44 @@ class SidekickUI(QWidget):
         )
         self.clear_context_button.setText(f"Clear Context ({len(self.context)-1})")
         self.prompt_input.clear()
-
-        self.talk_button.setStyleSheet(
-            """
-            QPushButton {
-                border-radius: 10px;
-                color: white;
-                background-color: #3498db;
-                padding: 6px 14px;
-                font-size: 13px;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-            QPushButton:pressed {
-                background-color: #e74c3c; /* Record button red on press */
-                color: white; /* White text for contrast */
-            }
-            """
-        )
+        if self.expand_at_start:
+            self.talk_button.setStyleSheet(
+                """
+                QPushButton {
+                    border-radius: 10px;
+                    color: white;
+                    background-color: #3498db;
+                    padding: 6px 14px;
+                    font-size: 13px;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+                QPushButton:pressed {
+                    background-color: #e74c3c; /* Record button red on press */
+                    color: white; /* White text for contrast */
+                }
+                """
+            )
+        else:
+            self.talk_button.setStyleSheet(
+                """
+                QPushButton {
+                    border-radius: 10px;
+                    color: white;
+                    background-color: #3498db;
+                    padding: 6px 14px;
+                    font-size: 13px;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+                QPushButton:pressed {
+                    background-color: #e74c3c; /* Record button red on press */
+                    color: white; /* White text for contrast */
+                }
+                """
+            )
         self.talk_button.setText("Talk (Hold)")
         self.talk_button.repaint()
 
@@ -872,23 +910,42 @@ class SidekickUI(QWidget):
     def on_talk_button_released(self):
         """Stop recording, transcribe audio, and send as prompt."""
         print("Talk button released")
-        self.talk_button.setStyleSheet(
-            """
-            QPushButton {
-                border-radius: 10px;
-                color: white;
-                background-color:  #27ae60;
-                padding: 10px 18px;
-                font-size: 13px;
-            }
-            QPushButton:hover {
-                background-color:  #27ae60;
-            }
-            QPushButton:pressed {
-                background-color: #27ae60;
-            }
-            """
-        )
+        if self.expand_at_start:
+            self.talk_button.setStyleSheet(
+                """
+                QPushButton {
+                    border-radius: 10px;
+                    color: white;
+                    background-color:  #27ae60;
+                    padding: 6px 14px;
+                    font-size: 13px;
+                }
+                QPushButton:hover {
+                    background-color:  #27ae60;
+                }
+                QPushButton:pressed {
+                    background-color: #27ae60;
+                }
+                """
+            )
+        else:
+            self.talk_button.setStyleSheet(
+                """
+                QPushButton {
+                    border-radius: 20px;
+                    color: white;
+                    background-color:  #27ae60;
+                    padding: 6px 14px;
+                    font-size: 13px;
+                }
+                QPushButton:hover {
+                    background-color:  #27ae60;
+                }
+                QPushButton:pressed {
+                    background-color: #27ae60;
+                }
+                """
+            )
         self.talk_button.setText("Thinking...")
         self.talk_button.repaint()
 
@@ -908,24 +965,44 @@ class SidekickUI(QWidget):
                 self.status_bar.setText("Error Recording")
                 QTimer.singleShot(3000, self.clear_status_bar)
 
-                self.talk_button.setStyleSheet(
+                if self.expand_at_start:
+                    self.talk_button.setStyleSheet(
+                        """
+                    QPushButton {
+                        border-radius: 10px;
+                        color: white;
+                        background-color: #3498db;
+                        padding: 6px 14px;
+                        font-size: 13px;
+                    }
+                    QPushButton:hover {
+                        background-color: #2980b9;
+                    }
+                    QPushButton:pressed {
+                        background-color: #e74c3c; /* Record button red on press */
+                        color: white; /* White text for contrast */
+                    }
                     """
-                QPushButton {
-                    border-radius: 10px;
-                    color: white;
-                    background-color: #3498db;
-                    padding: 10px 18px;
-                    font-size: 13px;
-                }
-                QPushButton:hover {
-                    background-color: #2980b9;
-                }
-                QPushButton:pressed {
-                    background-color: #e74c3c; /* Record button red on press */
-                    color: white; /* White text for contrast */
-                }
-                """
-                )
+                    )
+                else:
+                    self.talk_button.setStyleSheet(
+                        """
+                    QPushButton {
+                        border-radius: 20px;
+                        color: white;
+                        background-color: #3498db;
+                        padding: 6px 14px;
+                        font-size: 13px;
+                    }
+                    QPushButton:hover {
+                        background-color: #2980b9;
+                    }
+                    QPushButton:pressed {
+                        background-color: #e74c3c; /* Record button red on press */
+                        color: white; /* White text for contrast */
+                    }
+                    """
+                    )
                 self.clean_last_audio_tempfile()
                 self.talk_button.setText("Talk (Hold)")
                 return
@@ -946,24 +1023,44 @@ class SidekickUI(QWidget):
             print(f"Transcribed text: {transcribed_text}")
             self.prompt_input.setText(transcribed_text)
             self.on_send_button_clicked()
-            self.talk_button.setStyleSheet(
-                """
-                QPushButton {
-                    border-radius: 10px;
-                    color: white;
-                    background-color: #3498db;
-                    padding: 10px 18px;
-                    font-size: 13px;
-                }
-                QPushButton:hover {
-                    background-color: #2980b9;
-                }
-                QPushButton:pressed {
-                    background-color: #e74c3c; /* Record button red on press */
-                    color: white; /* White text for contrast */
-                }
-                """
-            )
+            if self.expand_at_start:
+                self.talk_button.setStyleSheet(
+                    """
+                    QPushButton {
+                        border-radius: 10px;
+                        color: white;
+                        background-color: #3498db;
+                        padding: 6px 14px;
+                        font-size: 13px;
+                    }
+                    QPushButton:hover {
+                        background-color: #2980b9;
+                    }
+                    QPushButton:pressed {
+                        background-color: #e74c3c; /* Record button red on press */
+                        color: white; /* White text for contrast */
+                    }
+                    """
+                )
+            else:
+                self.talk_button.setStyleSheet(
+                    """
+                    QPushButton {
+                        border-radius: 20px;
+                        color: white;
+                        background-color: #3498db;
+                        padding: 6px 14px;
+                        font-size: 13px;
+                    }
+                    QPushButton:hover {
+                        background-color: #2980b9;
+                    }
+                    QPushButton:pressed {
+                        background-color: #e74c3c; /* Record button red on press */
+                        color: white; /* White text for contrast */
+                    }
+                    """
+                )
             self.clean_last_audio_tempfile()
             self.talk_button.setText("Talk (Hold)")
 

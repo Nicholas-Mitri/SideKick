@@ -307,7 +307,7 @@ class SidekickUI(QWidget):
         # GPT reply display
         self.reply_display = QTextEdit()
         self.reply_display.setReadOnly(True)
-        self.reply_display.setPlaceholderText("SideKick is reply here...")
+        self.reply_display.setPlaceholderText("SideKick will reply here...")
         # Style is now set app-wide
 
         # Options: checkboxes, copy, read

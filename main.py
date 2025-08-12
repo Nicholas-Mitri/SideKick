@@ -92,8 +92,8 @@ class SidekickUI(QWidget):
                 background: transparent;
             }
             QTextEdit {
-                background-color: #2a2e36;  /* Slightly brighter than #23272e */
-                border: 0px solid  #2a2e36;
+                background-color: #32363e;  /* A little lighter than #2a2e36 */
+                border: 0px solid  #32363e;
                 border-radius: 12px;
                 padding: 10px;
                 font-size: 14px;
@@ -117,20 +117,20 @@ class SidekickUI(QWidget):
                 height: 18px;
                 border-radius: 4px;
                 border: 0px solid #444a58;
-                background: #2a2e36;
+                background: #32363e;
             }
             QCheckBox::indicator:checked {
                 background: #3498db;
                 border: 0px solid #5a5f6e;
             }
             QCheckBox::indicator:unchecked {
-                background: #2a2e36;
+                background: #32363e;
                 border: 0px solid #444a58;
             }
             QPushButton {
                 border-radius: 10px;
                 color: #f2f2f2;
-                background-color: #2a2e36;
+                background-color: #32363e;
                 padding: 5px 9px;
                 border: 0px solid #444a58;
                 font-size: 13px;
@@ -144,7 +144,7 @@ class SidekickUI(QWidget):
                 border: 1px solid #7b7f8a;
             }
             QPushButton:disabled {
-                background-color: #2a2e36;
+                background-color: #32363e;
                 color: #888;
                 border: 1px solid #333;
             }
@@ -206,53 +206,91 @@ class SidekickUI(QWidget):
         self.expand_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.expand_button.clicked.connect(self.on_expand_button_toggle)
 
-        # Style for talk button
-        self.talk_button.setStyleSheet(
-            """
-            QPushButton {
-                border-radius: 10px;
-                color: white;
-                background-color: #3498db;
-                padding: 6px 14px;
-                font-size: 13px;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-            QPushButton:pressed {
-                background-color: #e74c3c; /* Record button red on press */
-                color: white; /* White text for contrast */
-            }
-            """
-        )
-
-        # Style for expand button
-        self.expand_button.setStyleSheet(
-            """
-            QPushButton {
-                border-radius: 10px;
-                color: white;
-                background-color: #3498db;
-                padding: 6px 14px;
-                font-size: 13px;
-
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-            QPushButton:pressed {
-                background-color: #2471a3;
-            }
-            """
-        )
-
         # Set initial expand/collapse state
         if self.expand_at_start:
+            # Style for talk button
+            self.talk_button.setStyleSheet(
+                """
+                QPushButton {
+                    border-radius: 10px;
+                    color: white;
+                    background-color: #3498db;
+                    padding: 6px 14px;
+                    font-size: 13px;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+                QPushButton:pressed {
+                    background-color: #e74c3c; /* Record button red on press */
+                    color: white; /* White text for contrast */
+                }
+                """
+            )
+
+            # Style for expand button
+            self.expand_button.setStyleSheet(
+                """
+                QPushButton {
+                    border-radius: 10px;
+                    color: white;
+                    background-color: #3498db;
+                    padding: 6px 14px;
+                    font-size: 13px;
+
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+                QPushButton:pressed {
+                    background-color: #2471a3;
+                }
+                """
+            )
             self.expand_button.setFixedWidth(40)
             self.expand_button.setText("-")
             self.resize(700, 500)
 
         else:
+            # Style for talk button
+            self.talk_button.setStyleSheet(
+                """
+                QPushButton {
+                    border-radius: 20px;
+                    color: white;
+                    background-color: #3498db;
+                    padding: 6px 14px;
+                    font-size: 13px;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+                QPushButton:pressed {
+                    background-color: #e74c3c; /* Record button red on press */
+                    color: white; /* White text for contrast */
+                }
+                """
+            )
+
+            # Style for expand button
+            self.expand_button.setStyleSheet(
+                """
+                QPushButton {
+                    border-radius: 20px;
+                    color: white;
+                    background-color: #3498db;
+                    padding: 6px 14px;
+                    font-size: 13px;
+
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+                QPushButton:pressed {
+                    background-color: #2471a3;
+                }
+                """
+            )
             self.expand_button.setText("+")
             self.talk_button.setFixedSize(100, 60)
             self.expand_button.setFixedWidth(40)
@@ -607,6 +645,46 @@ class SidekickUI(QWidget):
 
         if self.expand_at_start:
             # Collapse UI
+
+            # Style for talk button
+            self.talk_button.setStyleSheet(
+                """
+                QPushButton {
+                    border-radius: 20px;
+                    color: white;
+                    background-color: #3498db;
+                    padding: 6px 14px;
+                    font-size: 13px;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+                QPushButton:pressed {
+                    background-color: #e74c3c; /* Record button red on press */
+                    color: white; /* White text for contrast */
+                }
+                """
+            )
+
+            # Style for expand button
+            self.expand_button.setStyleSheet(
+                """
+                QPushButton {
+                    border-radius: 20px;
+                    color: white;
+                    background-color: #3498db;
+                    padding: 6px 14px;
+                    font-size: 13px;
+
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+                QPushButton:pressed {
+                    background-color: #2471a3;
+                }
+                """
+            )
             self.expand_at_start = False
             self.expand_button.setText("+")
             for widget in self.findChildren(QWidget):
@@ -655,6 +733,45 @@ class SidekickUI(QWidget):
             self.anim_group.addAnimation(self.app_anim_w)
         else:
             # Expand UI
+            # Style for talk button
+            self.talk_button.setStyleSheet(
+                """
+                QPushButton {
+                    border-radius: 10px;
+                    color: white;
+                    background-color: #3498db;
+                    padding: 6px 14px;
+                    font-size: 13px;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+                QPushButton:pressed {
+                    background-color: #e74c3c; /* Record button red on press */
+                    color: white; /* White text for contrast */
+                }
+                """
+            )
+
+            # Style for expand button
+            self.expand_button.setStyleSheet(
+                """
+                QPushButton {
+                    border-radius: 10px;
+                    color: white;
+                    background-color: #3498db;
+                    padding: 6px 14px;
+                    font-size: 13px;
+
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+                QPushButton:pressed {
+                    background-color: #2471a3;
+                }
+                """
+            )
             self.expand_at_start = True
             self.expand_button.setText("-")
             for widget in self.findChildren(QWidget):

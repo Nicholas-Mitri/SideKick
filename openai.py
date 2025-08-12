@@ -88,6 +88,8 @@ def chat_with_gpt5_stream(
 
     streaming_reply = ""
     partial_transciption = ""
+    citations = dict()
+
     with requests.post(url, headers=openai_headers(), json=payload, stream=True) as r:
         r.raise_for_status()
         for raw in r.iter_lines(decode_unicode=True):
@@ -103,35 +105,64 @@ def chat_with_gpt5_stream(
                     continue
                 t = obj.get("type")
                 # Yield text deltas as they arrive
+                print(obj)
                 if t == "response.output_text.delta":
                     # Depending on provider schema, text might be in obj["delta"]["text"] or obj["output_text"]["delta"]
                     delta = obj.get("delta", {})
                     if delta:
-                        streaming_reply += delta
-                        if UI_object is not None:
-                            UI_object.reply_display.setPlainText(streaming_reply)
-                            QApplication.processEvents()
-                            if UI_object.auto_read:
-                                partial_transciption += delta
-                                if streaming_reply[-1] in [".", "!", "?"]:
-                                    # Look back up to the last 20 characters for a sentence end
-                                    last_few = streaming_reply[-20:]
-                                    # Regex: match . ! or ? not preceded and followed by a digit (not part of a number)
-                                    # and followed by space or end of string
-                                    match = re.search(
-                                        r"(?<!\d)([.!?])(?!\d)(\s|$)", last_few
-                                    )
-                                    if match:
+                        if len(delta) < 15:
+                            streaming_reply += delta
+                            if UI_object is not None:
+                                UI_object.reply_display.setPlainText(streaming_reply)
+                                QApplication.processEvents()
+                                if UI_object.auto_read and not UI_object.websearch:
+                                    partial_transciption += delta
+                                    if streaming_reply[-1] in [".", "!", "?"]:
+                                        # Look back up to the last 20 characters for a sentence end
+                                        last_few = streaming_reply[-20:]
+                                        # Regex: match . ! or ? not preceded and followed by a digit (not part of a number)
+                                        # and followed by space or end of string
+                                        match = re.search(
+                                            r"(?<!\d)([.!?])(?!\d)(\s|$)", last_few
+                                        )
+                                        if match:
+                                            # whenever you have a partial_transcription (or a completed sentence)
+                                            tts_enqueue(partial_transciption)
+                                            print(
+                                                f"End of sentence detected in {last_few}"
+                                            )
+                                            partial_transciption = ""
+                        else:
+                            if not citations.get(delta, 0):
+                                citation_num = len(citations)
+                                citations[delta] = {
+                                    "url": "",
+                                    "title": "",
+                                    "order": citation_num + 1,
+                                }
 
-                                        # whenever you have a partial_transcription (or a completed sentence)
-                                        tts_enqueue(partial_transciption)
-                                        print(f"End of sentence detected in {last_few}")
-                                        partial_transciption = ""
+                            streaming_reply += f"[{citations[delta]['order']}]"
 
                     else:
                         # when a new reply starts
                         yield delta
-                elif t in ("response.output_text.done", "response.error"):
+                elif t == "response.output_text.annotation.added":
+                    url = obj.get("annotation", {}).get("url")
+                    title = obj.get("annotation", {}).get("title", {})
+                    for key in citations.keys():
+                        if url in key:
+                            citations[key]["url"] = url
+                            citations[key]["title"] = title
+
+                elif t == "response.output_text.done":
+                    if UI_object.websearch:
+
+                        UI_object.reply_display.setPlainText(
+                            format_web_reply(streaming_reply, citations)
+                        )
+                        QApplication.processEvents()
+
+                        asyncio.run(TTS.speak_async(streaming_reply))
                     break
 
 
@@ -195,6 +226,14 @@ def transcribe_audio(
     if response_format == "json" or response_format == "verbose_json":
         return response.json()
     return response.text
+
+
+def format_web_reply(reply, citations):
+    citation_block = "References:\n"
+    sorted_citations = sorted(citations.items(), key=lambda x: x[1]["order"])
+    for c in sorted_citations:
+        citation_block += f"[{c[1]['order']}]: ({c[1]['url']}) {c[1]['title']}\n"
+    return f"{reply}\n\n{citation_block}"
 
 
 if __name__ == "__main__":

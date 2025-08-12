@@ -185,7 +185,7 @@ class SidekickUI(QWidget):
         self.prompt_input_event_filter = PromptInputEventFilter(self)
         self.prompt_input.installEventFilter(self.prompt_input_event_filter)
 
-        # Right: Send button and context selection
+        # Right: Send button
         right_layout = QVBoxLayout()
         self.send_button = QPushButton("Send")
         self.send_button.clicked.connect(self.on_send_button_clicked)

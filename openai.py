@@ -54,7 +54,20 @@ def chat_with_gpt5(
         print(f"Error Code: {error_data.get('error', {}).get('code', 'No code')}")
         print(f"Error Param: {error_data.get('error', {}).get('param', 'No param')}")
 
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        if response.status_code == 401:
+            print("HTTP 401 Unauthorized: Check your OpenAI API key.")
+            return -1
+        elif response.status_code == 403:
+            print(
+                "HTTP 403 Forbidden: Check your OpenAI API key or account permissions."
+            )
+            return -1
+        print(f"HTTP error occurred: {e}")
+        return -2
+
     assistant_text = ""
     for block in response.json().get("output", []):
         if block.get("role") == "assistant":
@@ -91,7 +104,19 @@ def chat_with_gpt5_stream(
     citations = dict()
 
     with requests.post(url, headers=openai_headers(), json=payload, stream=True) as r:
-        r.raise_for_status()
+        try:
+            r.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            if r.status_code == 401:
+                print("HTTP 401 Unauthorized: Check your OpenAI API key.")
+                return -1
+            elif r.status_code == 403:
+                print(
+                    "HTTP 403 Forbidden: Check your OpenAI API key or account permissions."
+                )
+                return -1
+            print(f"HTTP error occurred: {e}")
+            return -2
         for raw in r.iter_lines(decode_unicode=True):
             if not raw:
                 continue
@@ -203,7 +228,7 @@ def attach_image_message(image_path):
 
 
 def transcribe_audio(
-    audio_path, model="whisper-1", language=None, prompt=None, response_format="text"
+    audio_path, model="whisper-1", language="en", prompt=None, response_format="text"
 ):
     """
     Uses OpenAI's speech-to-text (Whisper) API to transcribe audio.

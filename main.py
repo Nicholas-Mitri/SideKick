@@ -1,5 +1,6 @@
 import sys
 import datetime
+from venv import logger
 from PyQt6.QtWidgets import (
     QApplication,
     QWidget,
@@ -36,8 +37,7 @@ import numpy as np
 import threading
 import tempfile
 import wave
-
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+import logging
 
 
 class PromptInputEventFilter(QObject):
@@ -309,7 +309,7 @@ class SidekickUI(QWidget):
 
         # Left: Prompt input field
         self.prompt_input = QTextEdit()
-        self.prompt_input.setPlaceholderText("Type your prompt here...")
+        self.prompt_input.setPlaceholderText("Type your prompt [Enter to send]...")
         # Style is now set app-wide
 
         # Install event filter for Enter key
@@ -318,6 +318,10 @@ class SidekickUI(QWidget):
 
         # Right: Send button
         right_layout = QVBoxLayout()
+        self.screenshot_button = QPushButton("+ Screenshot")
+        self.screenshot_button.clicked.connect(self.on_send_button_clicked)
+        self.send_button = QPushButton("Send")
+        self.send_button.clicked.connect(self.on_send_button_clicked)
         self.send_button = QPushButton("Send")
         self.send_button.clicked.connect(self.on_send_button_clicked)
         right_layout.addWidget(self.send_button)
@@ -448,12 +452,15 @@ class SidekickUI(QWidget):
         self.set_app_start_mode()
 
         # Disable app if no OpenAI API key
-        if not OPENAI_API_KEY:
+        if not openai.OPENAI_API_KEY:
             if not self.expand_at_start:
                 self.on_expand_button_toggle()
             self.status_bar.setText("No OpenAI API Key! App disabled!")
             self.status_bar.setStyleSheet("color: red")
             self.setEnabled(False)
+
+        # Check API key
+        self.check_api_key()
 
     def on_send_button_clicked(self):
         """Handle the Send button click event."""
@@ -501,25 +508,48 @@ class SidekickUI(QWidget):
         content = [{"type": "input_text", "text": prompt_text}]
 
         # Handle context selection: Screenshot or Clipboard
-        if self.screeshot:
+        if self.screeshot_taken:
             # Attach screenshot as context
-            img_url = screen_grab.grab_area_interactive()
-            if img_url:
+            if self.img_url:
                 # If prompt is empty, add a default question for the image
                 if not content[-1]["text"]:
                     content.append(
                         {"type": "input_text", "text": "What is in this image?"}
                     )
-                content.append(openai.attach_image_message(img_url))
-            # Clean up the temporary screenshot file
-            screen_grab.cleanup_tempfile(img_url)
-        elif self.clipboard:
+                content.append(openai.attach_image_message(self.img_url))
+                print("Screenshot added to context...")
+                # Clean up the temporary screenshot file
+                screen_grab.cleanup_tempfile(self.img_url)
+
+            else:
+                print("No screenshot found...")
+            self.screeshot_taken = False
+            self.img_url = ""
+
+        elif self.clipboard_taken:
+
             # Attach clipboard text as context
-            clipboard_text = clipboard.get_last_clipboard_text()
-            if clipboard_text:
+            if self.clipboard_text:
+                # If prompt is empty, add a default question for the image
+                if not content[-1]["text"]:
+                    content.append(
+                        {
+                            "type": "input_text",
+                            "text": "(User forgot to add prompt. Use context from clipboard instead.",
+                        }
+                    )
+                # Add saved clipboard item to content
                 content.append(
-                    {"type": "input_text", "text": f"Context: {clipboard_text}"}
+                    {
+                        "type": "input_text",
+                        "text": f"Context from clipboard: {self.clipboard_text}",
+                    }
                 )
+                print("Saved clipboard text added to context...")
+            else:
+                print("No clipboard text found...")
+            self.clipboard_taken = False
+            self.clipboard_text = ""
 
         # Prepare and send message to OpenAI
         messages = {"role": "user", "content": content}
@@ -574,6 +604,14 @@ class SidekickUI(QWidget):
             )
         self.talk_button.setText("Talk (Hold)")
         self.talk_button.repaint()
+
+    def on_screenshot_button_clicked(self):
+        self.img_url = screen_grab.grab_area_interactive()
+        self.screeshot_taken = True
+
+    def on_clipboard_button_clicked(self):
+        self.clipboard_taken = True
+        self.clipboard_text = clipboard.get_last_clipboard_text()
 
     def on_copy_reply_button_clicked(self):
         """Copy the reply text to the clipboard."""
@@ -1108,24 +1146,26 @@ class SidekickUI(QWidget):
         with open("system_prompt.txt", "r") as f:
             return f.read()
 
+    def check_api_key(self):
+        reply = openai.chat_with_gpt5("hi")
+        if reply == -1:
+            if not self.expand_at_start:
+                self.on_expand_button_toggle()
+            self.status_bar.setStyleSheet("color: red;")
+            self.status_bar.setText("Invalid API Key")
+            self.setEnabled(False)
+
 
 if __name__ == "__main__":
+
+    # Set up logger
+    import root_logger
+
+    root_logger.setup_root_logger("sidekick.log")
+    logger = logging.getLogger(__name__)
+
     # Entry point for the application
     app = QApplication(sys.argv)
     window = SidekickUI()
-    window.show()
-    sys.exit(app.exec())
-    window.show()
-    sys.exit(app.exec())
-    window.show()
-    sys.exit(app.exec())
-    window.show()
-    sys.exit(app.exec())
-    window.show()
-    sys.exit(app.exec())
-    window.show()
-    sys.exit(app.exec())
-    window.show()
-    sys.exit(app.exec())
     window.show()
     sys.exit(app.exec())

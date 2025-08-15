@@ -1,6 +1,5 @@
 import sys
 import datetime
-from venv import logger
 import re
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 import os
@@ -43,7 +42,11 @@ import threading
 import tempfile
 import wave
 import logging
-import TTS_openai as TTS
+import TTS
+import logging_config
+
+logging_config.setup_root_logging("sidekick.log")
+logger = logging.getLogger(__name__)
 
 
 class GPTWorker(QObject):
@@ -104,7 +107,7 @@ class PromptInputEventFilter(QObject):
                         | Qt.KeyboardModifier.AltModifier
                     )
                 ):
-                    TTS.clear()
+                    # TTS.clear()
                     self.parent.on_send_button_clicked_nonblocking()
                     return True  # Suppress default
         return False
@@ -860,11 +863,11 @@ class SidekickUI(QWidget):
                 self.reply_display.setPlainText(final_reply)
                 QApplication.processEvents()
                 if self.auto_read:
-                    asyncio.run(TTS.speak_async_streaming(final_reply))
+                    TTS.enqueue(final_reply)
             else:
                 # TTS.enqueue(self.partial_transciption)
                 if self.auto_read:
-                    asyncio.run(TTS.speak_async_streaming(self.streaming_reply))
+                    TTS.enqueue(self.streaming_reply)
 
             reply = self.streaming_reply
             self.context.append(
@@ -984,13 +987,13 @@ class SidekickUI(QWidget):
         if not is_playing:
             # Read the reply text aloud using TTS
             reply_text = self.reply_display.toPlainText()
-            asyncio.run(TTS.speak_async_streaming(reply_text))
+            TTS.enqueue(reply_text)
         else:
             # Stop audio playback if currently playing
             try:
                 if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
                     pygame.mixer.music.stop()
-                    TTS.clear()
+                    # TTS.clear()
                     print("Audio playback stopped.")
             except Exception as e:
                 print(f"Error stopping audio playback: {e}")
@@ -1294,7 +1297,7 @@ class SidekickUI(QWidget):
                 return
         else:
             """Start recording audio for voice input."""
-            TTS.clear()
+            # TTS.clear()
             logger.debug("Talk button pressed")
             self.update_status_bar(
                 text="Listening...",
@@ -1459,7 +1462,7 @@ class SidekickUI(QWidget):
             if is_playing:
                 if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
                     pygame.mixer.music.stop()
-                    TTS.clear()
+                    # TTS.clear()
                     logger.info("Audio playback stopped before quitting.")
         except Exception as e:
             logger.error(f"Error stopping audio playback: {e}")
@@ -1491,10 +1494,8 @@ class SidekickUI(QWidget):
 if __name__ == "__main__":
 
     # Set up logger
-    import logging_config
 
-    logging_config.setup_root_logging("sidekick.log")
-    logger = logging.getLogger(__name__)
+    TTS.enqueue("Hello, I'm Sidekick! How can I assist you today?")
 
     # Entry point for the application
     app = QApplication(sys.argv)

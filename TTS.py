@@ -6,6 +6,10 @@ import tempfile
 import threading
 import time
 from queue import Queue, Empty
+import logging, logging_config
+
+logging_config.setup_root_logging("edge_tts.log")
+logger = logging.getLogger(__name__)
 
 
 async def play_speech(text="Hello, this is a test!", voice="en-US-AndrewNeural"):
@@ -75,23 +79,41 @@ _worker_started = False
 
 
 def _tts_worker():
+
     while True:
         text = _play_queue.get()
         try:
             if not text:
+                logger.debug("Received empty text from queue, skipping.")
                 continue
+            logger.info(f"Starting TTS playback for text: {text[:50]}...")
             # Start async playback (returns immediately)
-            asyncio.run(speak_async(text))
+            try:
+                asyncio.run(speak_async(text))
+            except Exception as e:
+                logger.error("Exception in _tts_worker:", exc_info=True)
+                logger.error(f"Exception in _tts_worker: {e}")
+
             # Wait for playback to start (up to ~2s)
             waited = 0.0
-            while (
-                not pygame.mixer.get_init() or not pygame.mixer.music.get_busy()
-            ) and waited < 2.0:
-                time.sleep(0.05)
-                waited += 0.05
+            try:
+                while (
+                    not pygame.mixer.get_init() or not pygame.mixer.music.get_busy()
+                ) and waited < 2.0:
+                    time.sleep(0.05)
+                    waited += 0.05
+
+                if waited >= 2.0:
+                    logger.warning("Playback did not start within 2 seconds.")
+            except Exception as e:
+                logger.error("Exception in _tts_worker:", exc_info=True)
+                logger.error(f"Exception in _tts_worker: {e}")
             # Then wait until it finishes
             while pygame.mixer.get_init() and pygame.mixer.music.get_busy():
                 time.sleep(0.05)
+            logger.info("TTS playback finished.")
+        except Exception as e:
+            logger.error(f"Exception in _tts_worker: {e}", exc_info=True)
         finally:
             _play_queue.task_done()
 
@@ -124,5 +146,4 @@ def clear():
 
 if __name__ == "__main__":
     # Test speech generation
-    asyncio.run(play_speech())
     asyncio.run(speak_async("Hello, this is a test!"))

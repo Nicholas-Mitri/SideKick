@@ -1380,7 +1380,7 @@ class SidekickUI(QWidget):
             if screen:
                 screen_geometry = screen.availableGeometry()
                 window_width = self.collapsed_app_width
-                x = screen_geometry.x() + screen_geometry.width() - window_width + 20
+                x = screen_geometry.x() + screen_geometry.width() - window_width - 20
                 y = screen_geometry.y() + 20
                 self.move(x, y)
         else:

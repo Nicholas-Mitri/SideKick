@@ -3,7 +3,8 @@ import datetime
 from venv import logger
 import re
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
-
+import os
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QApplication,
     QWidget,
@@ -15,6 +16,7 @@ from PyQt6.QtWidgets import (
     QSpacerItem,
     QSizePolicy,
     QFileDialog,
+    QStyle,
 )
 from PyQt6.QtCore import (
     Qt,
@@ -120,6 +122,23 @@ class SidekickUI(QWidget):
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
 
         # Set dark mode app-wide style to match button_dark_style, with more padding and smaller font
+        # Initialize SidekickUI state variables
+        self.clipboard = False
+        self.screeshot = False
+        self.websearch = False
+        self.auto_read = True
+        self.screeshot_taken = False
+        self.clipboard_taken = False
+        self.img_url = ""
+        self.clipboard_text = ""
+        self.right_widget_width = 140
+        self.expand_at_start = False
+        self.talk_button_height_after_expand = 35
+
+        self.collapsed_app_width = 200
+        self.collapsed_app_height = 140
+        self.expanded_app_width = 700
+        self.expanded_app_height = 500
 
         self.setStyleSheet(
             """
@@ -207,18 +226,6 @@ class SidekickUI(QWidget):
         """
         )
 
-        # Initialize SidekickUI state variables
-        self.clipboard = False
-        self.screeshot = False
-        self.websearch = False
-        self.auto_read = True
-        self.screeshot_taken = False
-        self.clipboard_taken = False
-        self.img_url = ""
-        self.clipboard_text = ""
-        self.right_widget_width = 140
-        self.expand_at_start = True
-        self.talk_button_height_after_expand = 35
         self.context = [
             {
                 "role": "system",
@@ -358,6 +365,22 @@ class SidekickUI(QWidget):
                     color: white; /* White text for contrast */
                 }
                 """
+        self.COLLAPSED_BUTTONS_DEFAULT_STYLE = """
+                QPushButton {
+                    border-radius: 12px;
+                    color: white;
+                    background-color: #3498db;
+                    padding: 6px 14px;
+                    font-size: 13px;
+
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+                QPushButton:pressed {
+                    background-color: #2471a3;
+                }
+                """
         # Create worker + thread
         self.gpt_thread = None
         self.gpt_worker = None
@@ -374,6 +397,72 @@ class SidekickUI(QWidget):
         main_layout = QVBoxLayout()
 
         # --- Top Row: Talk and Expand Buttons ---
+
+        # Create a QWidget with QVBoxLayout and three buttons with placeholder icons, hidden by default
+        collapsed_buttons_layout = QHBoxLayout()
+        # Create three buttons with placeholder icons
+        self.collapsed_screenshot_button = QPushButton()
+        self.collapsed_screenshot_button.setStyleSheet(
+            self.COLLAPSED_BUTTONS_DEFAULT_STYLE
+        )
+        self.collapsed_screenshot_button.clicked.connect(
+            self.on_screenshot_button_clicked
+        )
+        self.collapsed_screenshot_button.setToolTip("Take a screenshot")
+        self.collapsed_clipboard_button = QPushButton()
+        self.collapsed_clipboard_button.setStyleSheet(
+            self.COLLAPSED_BUTTONS_DEFAULT_STYLE
+        )
+        self.collapsed_clipboard_button.clicked.connect(
+            self.on_clipboard_button_clicked
+        )
+        self.collapsed_clipboard_button.setToolTip("Copy from clipboard")
+        self.collapsed_read_button = QPushButton()
+        self.collapsed_read_button.setStyleSheet(self.COLLAPSED_BUTTONS_DEFAULT_STYLE)
+        self.collapsed_read_button.clicked.connect(self.on_read_button_clicked)
+        self.collapsed_read_button.setToolTip("Start/Stop reading")
+
+        # Define paths to your custom icons
+        screenshot_icon_path = (
+            "icons/screenshot_region_24dp_FFFFFF_FILL0_wght400_GRAD0_opsz24.svg"
+        )
+        clipboard_icon_path = (
+            "icons/content_copy_24dp_FFFFFF_FILL0_wght400_GRAD0_opsz24.svg"
+        )
+        read_icon_path = "icons/autostop_24dp_FFFFFF_FILL0_wght400_GRAD0_opsz24.svg"
+
+        # Screenshot button icon
+        if os.path.exists(screenshot_icon_path):
+            self.collapsed_screenshot_button.setIcon(QIcon(screenshot_icon_path))
+        else:
+            self.collapsed_screenshot_button.setIcon(
+                self.style().standardIcon(QStyle.StandardPixmap.SP_DesktopIcon)
+            )
+
+        # Clipboard button icon
+        if os.path.exists(clipboard_icon_path):
+            self.collapsed_clipboard_button.setIcon(QIcon(clipboard_icon_path))
+        else:
+            self.collapsed_clipboard_button.setIcon(
+                self.style().standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton)
+            )
+
+        # Read button icon
+        if os.path.exists(read_icon_path):
+            self.collapsed_read_button.setIcon(QIcon(read_icon_path))
+        else:
+            self.collapsed_read_button.setIcon(
+                self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay)
+            )
+
+        # Add buttons to the layout
+        collapsed_buttons_layout.addWidget(self.collapsed_screenshot_button)
+        collapsed_buttons_layout.addWidget(self.collapsed_clipboard_button)
+        collapsed_buttons_layout.addWidget(self.collapsed_read_button)
+
+        main_layout.addLayout(collapsed_buttons_layout)
+
+        # Talk button row
         talk_layout = QHBoxLayout()
 
         # Talk button for voice input
@@ -381,11 +470,13 @@ class SidekickUI(QWidget):
         self.talk_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.talk_button.pressed.connect(self.on_talk_button_pressed)
         self.talk_button.released.connect(self.on_talk_button_released)
+        self.talk_button.setToolTip("Hold to record. Click to interrupt reply.")
 
         # Expand/collapse button
         self.expand_button = QPushButton()
         self.expand_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.expand_button.clicked.connect(self.on_expand_button_toggle)
+        self.expand_button.setToolTip("Expand/Collapse")
 
         # Set initial expand/collapse state
         if self.expand_at_start:
@@ -396,7 +487,7 @@ class SidekickUI(QWidget):
             self.expand_button.setStyleSheet(self.EXPAND_BUTTON_EXPANDED_DEFAULT_STYLE)
             self.expand_button.setFixedWidth(40)
             self.expand_button.setText("-")
-            self.resize(700, 500)
+            self.resize(self.expanded_app_width, self.expanded_app_height)
 
         else:
             # Style for talk button
@@ -408,10 +499,9 @@ class SidekickUI(QWidget):
             self.talk_button.setFixedSize(100, 60)
             self.expand_button.setFixedWidth(40)
             self.expand_button.setFixedHeight(self.talk_button.height())
-            target_width = 200
-            target_height = 100
-            self.setMinimumSize(target_width, target_height)
-            self.resize(target_width, target_height)
+
+            self.setMinimumSize(self.collapsed_app_width, self.collapsed_app_height)
+            self.resize(self.collapsed_app_width, self.collapsed_app_height)
 
         talk_layout.addWidget(self.talk_button)
         talk_layout.addWidget(self.expand_button)
@@ -433,10 +523,14 @@ class SidekickUI(QWidget):
         right_layout = QVBoxLayout()
         self.screenshot_button = QPushButton("+ Screenshot")
         self.screenshot_button.clicked.connect(self.on_screenshot_button_clicked)
+        self.screenshot_button.setToolTip("Take a screenshot")
         self.clipboard_button = QPushButton("+ Clipboard")
         self.clipboard_button.clicked.connect(self.on_clipboard_button_clicked)
+        self.clipboard_button.setToolTip("Copy from clipboard")
         self.send_button = QPushButton("Send")
         self.send_button.clicked.connect(self.on_send_button_clicked_nonblocking)
+        self.send_button.setToolTip("Send prompt")
+
         right_layout.addWidget(self.screenshot_button)
         right_layout.addWidget(self.clipboard_button)
         right_layout.addWidget(self.send_button)
@@ -474,19 +568,23 @@ class SidekickUI(QWidget):
         self.checkbox_websearch = QCheckBox("Web Search")
         self.checkbox_websearch.setChecked(self.websearch)
         self.checkbox_websearch.stateChanged.connect(self.on_websearch_state_changed)
+        self.checkbox_websearch.setToolTip("Enable web search.")
 
         # Auto-read reply checkbox
         self.checkbox_autoread = QCheckBox("Auto-Read")
         self.checkbox_autoread.setChecked(self.auto_read)
         self.checkbox_autoread.stateChanged.connect(self.on_autoread_state_changed)
+        self.checkbox_autoread.setToolTip("Enable auto-read on reply.")
 
         # Copy reply button
         self.copy_reply_button = QPushButton("Copy")
         self.copy_reply_button.clicked.connect(self.on_copy_reply_button_clicked)
+        self.copy_reply_button.setToolTip("Copy reply to clipboard.")
 
         # Read/Stop TTS button
         self.read_button = QPushButton("Read/Stop")
         self.read_button.clicked.connect(self.on_read_button_clicked)
+        self.read_button.setToolTip("Read/Stop reply.")
 
         # Add all options to layout
         options_layout.addWidget(self.checkbox_websearch)
@@ -512,11 +610,13 @@ class SidekickUI(QWidget):
         # Load conversation button
         self.load_conversation_button = QPushButton("Load")
         self.load_conversation_button.clicked.connect(self.load_conversation)
+        self.load_conversation_button.setToolTip("Load conversation (JSON) from file.")
         context_options_layout.addWidget(self.load_conversation_button)
 
         # Save conversation button
         self.save_conversation_button = QPushButton("Save")
         self.save_conversation_button.clicked.connect(self.save_conversation)
+        self.save_conversation_button.setToolTip("Save conversation to JSON.")
         context_options_layout.addWidget(self.save_conversation_button)
 
         # Clear context button
@@ -524,6 +624,9 @@ class SidekickUI(QWidget):
             f"Clear Context ({len(self.context)-1})"
         )
         self.clear_context_button.clicked.connect(self.clear_context)
+        self.clear_context_button.setToolTip(
+            "Clear conversation context. (#) indicates number of messages saved in context."
+        )
 
         context_options_layout.addWidget(self.clear_context_button)
 
@@ -595,7 +698,9 @@ class SidekickUI(QWidget):
                     else self.TALK_BUTTON_COLLAPSED_DEFAULT_STYLE
                 )
                 self.update_talk_button("Talk (Hold)", styleSheet=style)
+
         else:
+            self.reply_display.clear()
 
             style = (
                 self.TALK_BUTTON_EXPANDED_INTERRUPT_STYLE
@@ -717,6 +822,7 @@ class SidekickUI(QWidget):
                             last_few = self.streaming_reply[-10:]
                             match = re.search(r"(?<!\d)([.!?])(?!\d)(?:\s|$)", last_few)
                             if match:
+
                                 tts_enqueue(self.partial_transciption)
                                 self.partial_transciption = ""
                 else:
@@ -738,106 +844,97 @@ class SidekickUI(QWidget):
                     self.citations[key]["url"] = url
                     self.citations[key]["title"] = title
 
-        elif t == "response.output_text.done":
+    # def process_gpt_stream(self, content, tools=None):
+    #     streaming_reply = ""
+    #     citations = dict()
+    #     partial_transciption = ""
+
+    #     for obj in openai.chat_with_gpt5_stream(messages=content, tools=tools):
+    #         t = obj.get("type")
+    #         if t == "response.output_text.delta":
+    #             # Depending on provider schema, text might be in obj["delta"]["text"] or obj["output_text"]["delta"]
+    #             delta = obj.get("delta", {})
+    #             if delta:
+    #                 if len(delta) < 30:
+    #                     streaming_reply += delta
+    #                     self.reply_display.setPlainText(streaming_reply)
+    #                     QApplication.processEvents()
+    #                     if self.auto_read and not self.websearch:
+    #                         partial_transciption += delta
+    #                         if (
+    #                             partial_transciption[-1] in [".", "!", "?", "\n"]
+    #                             and len(partial_transciption) > 20
+    #                         ):
+    #                             last_few = streaming_reply[-10:]
+    #                             match = re.search(
+    #                                 r"(?<!\d)([.!?])(?!\d)(?:\s|$)", last_few
+    #                             )
+    #                             if match:
+    #                                 tts_enqueue(partial_transciption)
+    #                                 partial_transciption = ""
+    #                 else:
+    #                     if not citations.get(delta, 0):
+    #                         citation_num = len(citations)
+    #                         citations[delta] = {
+    #                             "url": "",
+    #                             "title": "",
+    #                             "order": citation_num + 1,
+    #                         }
+
+    #                     streaming_reply += f"[{citations[delta]['order']}]"
+
+    #         elif t == "response.output_text.annotation.added":
+    #             url = obj.get("annotation", {}).get("url")
+    #             title = obj.get("annotation", {}).get("title", {})
+    #             for key in citations.keys():
+    #                 if url in key:
+    #                     citations[key]["url"] = url
+    #                     citations[key]["title"] = title
+
+    #         elif t == "response.output_text.done":
+    #             if self.websearch:
+    #                 final_reply = self.format_web_reply(streaming_reply, citations)
+    #                 self.reply_display.setPlainText(final_reply)
+    #                 QApplication.processEvents()
+
+    #                 asyncio.run(TTS.speak_async(streaming_reply))
+    #                 return final_reply
+    #             else:
+    #                 tts_enqueue(partial_transciption)
+    #                 return streaming_reply
+
+    def on_gpt_done(self):
+        if self.gpt_worker._abort:
+            logger.info("DONE AFTER ABORT")
+            self.reply_display.clear()
+
+        else:
+            logger.info(f"Received done")
+            self.clear_status_bar()
             if self.websearch:
                 final_reply = self.format_web_reply(
                     self.streaming_reply, self.citations
                 )
                 self.reply_display.setPlainText(final_reply)
                 QApplication.processEvents()
-
                 asyncio.run(TTS.speak_async(self.streaming_reply))
-                return final_reply
             else:
                 tts_enqueue(self.partial_transciption)
-                return self.streaming_reply
 
-    def process_gpt_stream(self, content, tools=None):
-        streaming_reply = ""
-        citations = dict()
-        partial_transciption = ""
+            reply = self.streaming_reply
+            self.context.append(
+                {
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": f"{reply}"}],
+                }
+            )
 
-        for obj in openai.chat_with_gpt5_stream(messages=content, tools=tools):
-            t = obj.get("type")
-            if t == "response.output_text.delta":
-                # Depending on provider schema, text might be in obj["delta"]["text"] or obj["output_text"]["delta"]
-                delta = obj.get("delta", {})
-                if delta:
-                    if len(delta) < 30:
-                        streaming_reply += delta
-                        self.reply_display.setPlainText(streaming_reply)
-                        QApplication.processEvents()
-                        if self.auto_read and not self.websearch:
-                            partial_transciption += delta
-                            if (
-                                partial_transciption[-1] in [".", "!", "?", "\n"]
-                                and len(partial_transciption) > 20
-                            ):
-                                last_few = streaming_reply[-10:]
-                                match = re.search(
-                                    r"(?<!\d)([.!?])(?!\d)(?:\s|$)", last_few
-                                )
-                                if match:
-                                    tts_enqueue(partial_transciption)
-                                    partial_transciption = ""
-                    else:
-                        if not citations.get(delta, 0):
-                            citation_num = len(citations)
-                            citations[delta] = {
-                                "url": "",
-                                "title": "",
-                                "order": citation_num + 1,
-                            }
+            # Update the clear context button to show the number of exchanges
+            self.clear_context_button.setText(f"Clear Context ({len(self.context)-1})")
+            # Clear the prompt input field
+            self.prompt_input.clear()
+            logger.info("Prompt input cleared and context button updated.")
 
-                        streaming_reply += f"[{citations[delta]['order']}]"
-
-            elif t == "response.output_text.annotation.added":
-                url = obj.get("annotation", {}).get("url")
-                title = obj.get("annotation", {}).get("title", {})
-                for key in citations.keys():
-                    if url in key:
-                        citations[key]["url"] = url
-                        citations[key]["title"] = title
-
-            elif t == "response.output_text.done":
-                if self.websearch:
-                    final_reply = self.format_web_reply(streaming_reply, citations)
-                    self.reply_display.setPlainText(final_reply)
-                    QApplication.processEvents()
-
-                    asyncio.run(TTS.speak_async(streaming_reply))
-                    return final_reply
-                else:
-                    tts_enqueue(partial_transciption)
-                    return streaming_reply
-
-    def on_gpt_done(self):
-        logger.info(f"Received done")
-        if self.websearch:
-            final_reply = self.format_web_reply(self.streaming_reply, self.citations)
-            self.reply_display.setPlainText(final_reply)
-            QApplication.processEvents()
-            asyncio.run(TTS.speak_async(self.streaming_reply))
-            return final_reply
-        else:
-            tts_enqueue(self.partial_transciption)
-
-        reply = self.streaming_reply
-        self.context.append(
-            {
-                "role": "assistant",
-                "content": [{"type": "output_text", "text": f"{reply}"}],
-            }
-        )
-
-        self.clear_status_bar()
-        # Update the clear context button to show the number of exchanges
-        self.clear_context_button.setText(f"Clear Context ({len(self.context)-1})")
-        # Clear the prompt input field
-        self.prompt_input.clear()
-        logger.info("Prompt input cleared and context button updated.")
-
-        self.prompt_input.clear()
         self.streaming_reply = ""
         self.citations = dict()
         self.partial_transciption = ""
@@ -849,39 +946,26 @@ class SidekickUI(QWidget):
         )
         self.update_talk_button("Talk (Hold)", styleSheet=style)
         self.clean_last_audio_tempfile()
-        self.clear_status_bar()
 
     def on_gpt_error(self, error):
         logger.error(f"Received error: {error}")
         self.update_status_bar(f"Error occured. Please check log.", "red", 3000)
-        self.reply_display.clear()
-        self.prompt_input.clear()
-        self.streaming_reply = ""
-        self.citations = dict()
-        self.partial_transciption = ""
-        self.clean_last_audio_tempfile()
-        style = (
-            self.TALK_BUTTON_EXPANDED_DEFAULT_STYLE
-            if self.expand_at_start
-            else self.TALK_BUTTON_COLLAPSED_DEFAULT_STYLE
-        )
-        self.update_talk_button("Talk (Hold)", styleSheet=style)
 
     def on_gpt_abort(self, abort):
         logger.info(f"Received abort: {abort}")
         self.update_status_bar("Aborting previous prompt...", "red", 3000)
-        self.reply_display.clear()
-        self.prompt_input.clear()
-        self.streaming_reply = ""
-        self.citations = dict()
-        self.partial_transciption = ""
-        self.clean_last_audio_tempfile()
-        style = (
-            self.TALK_BUTTON_EXPANDED_DEFAULT_STYLE
-            if self.expand_at_start
-            else self.TALK_BUTTON_COLLAPSED_DEFAULT_STYLE
-        )
-        self.update_talk_button("Talk (Hold)", styleSheet=style)
+        # self.reply_display.clear()
+        # self.prompt_input.clear()
+        # self.streaming_reply = ""
+        # self.citations = dict()
+        # self.partial_transciption = ""
+        # self.clean_last_audio_tempfile()
+        # style = (
+        #     self.TALK_BUTTON_EXPANDED_DEFAULT_STYLE
+        #     if self.expand_at_start
+        #     else self.TALK_BUTTON_COLLAPSED_DEFAULT_STYLE
+        # )
+        # self.update_talk_button("Talk (Hold)", styleSheet=style)
 
     # def on_send_button_clicked(self):
     #     """
@@ -1250,8 +1334,16 @@ class SidekickUI(QWidget):
             self.expand_at_start = False
             self.expand_button.setText("+")
             for widget in self.findChildren(QWidget):
-                if widget is not self.talk_button and widget is not self.expand_button:
+                if widget not in [
+                    self.talk_button,
+                    self.expand_button,
+                    self.collapsed_clipboard_button,
+                    self.collapsed_screenshot_button,
+                    self.collapsed_read_button,
+                ]:
                     widget.hide()
+                else:
+                    widget.show()
 
             self.talk_button.setMaximumWidth(120)
 
@@ -1277,20 +1369,19 @@ class SidekickUI(QWidget):
             self.anime_h.setEasingCurve(QEasingCurve.Type.OutCubic)
             self.anim_group.addAnimation(self.anime_h)
 
-            target_width = 200
-            target_height = 100
-            self.setMinimumSize(200, 100)
+            self.setMinimumSize(self.collapsed_app_width, self.collapsed_app_height)
+
             self.app_anim_h = QPropertyAnimation(self, b"maximumHeight")
             self.app_anim_h.setDuration(300)
             self.app_anim_h.setStartValue(self.height())
-            self.app_anim_h.setEndValue(target_height)
+            self.app_anim_h.setEndValue(self.collapsed_app_height)
             self.app_anim_h.setEasingCurve(QEasingCurve.Type.OutCubic)
             self.anim_group.addAnimation(self.app_anim_h)
 
             self.app_anim_w = QPropertyAnimation(self, b"maximumWidth")
             self.app_anim_w.setDuration(300)
             self.app_anim_w.setStartValue(self.width())
-            self.app_anim_w.setEndValue(target_width)
+            self.app_anim_w.setEndValue(self.collapsed_app_width)
             self.app_anim_w.setEasingCurve(QEasingCurve.Type.OutCubic)
             self.anim_group.addAnimation(self.app_anim_w)
         else:
@@ -1303,7 +1394,14 @@ class SidekickUI(QWidget):
             self.expand_at_start = True
             self.expand_button.setText("-")
             for widget in self.findChildren(QWidget):
-                widget.show()
+                if widget not in [
+                    self.collapsed_clipboard_button,
+                    self.collapsed_screenshot_button,
+                    self.collapsed_read_button,
+                ]:
+                    widget.show()
+                else:
+                    widget.hide()
 
             # Animate talk_button to expanded size
             self.talk_button.setSizePolicy(
@@ -1326,19 +1424,19 @@ class SidekickUI(QWidget):
             self.anime_h.setEasingCurve(QEasingCurve.Type.OutCubic)
             self.anim_group.addAnimation(self.anime_h)
 
-            self.setMaximumSize(700, 500)
+            self.setMaximumSize(self.expanded_app_width, self.expanded_app_height)
 
             self.app_anim_h = QPropertyAnimation(self, b"minimumHeight")
             self.app_anim_h.setDuration(300)
             self.app_anim_h.setStartValue(self.height())
-            self.app_anim_h.setEndValue(500)
+            self.app_anim_h.setEndValue(self.expanded_app_height)
             self.app_anim_h.setEasingCurve(QEasingCurve.Type.OutCubic)
             self.anim_group.addAnimation(self.app_anim_h)
 
             self.app_anim_w = QPropertyAnimation(self, b"minimumWidth")
             self.app_anim_w.setDuration(300)
             self.app_anim_w.setStartValue(self.width())
-            self.app_anim_w.setEndValue(700)
+            self.app_anim_w.setEndValue(self.expanded_app_width)
             self.app_anim_w.setEasingCurve(QEasingCurve.Type.OutCubic)
             self.anim_group.addAnimation(self.app_anim_w)
 
@@ -1351,9 +1449,19 @@ class SidekickUI(QWidget):
                 else QTimer.singleShot(10, self.talk_button.setFocus)
             )
             (
-                QTimer.singleShot(0, lambda: self.setFixedSize(700, 500))
+                QTimer.singleShot(
+                    0,
+                    lambda: self.setFixedSize(
+                        self.expanded_app_width, self.expanded_app_height
+                    ),
+                )
                 if self.expand_at_start
-                else QTimer.singleShot(0, lambda: self.setFixedSize(200, 100))
+                else QTimer.singleShot(
+                    0,
+                    lambda: self.setFixedSize(
+                        self.collapsed_app_width, self.collapsed_app_height
+                    ),
+                )
             )
 
         self.anim_group.finished.connect(_on_anims_finished)
@@ -1363,14 +1471,26 @@ class SidekickUI(QWidget):
         """Show or hide widgets based on the initial expand/collapse state."""
         if self.expand_at_start:
             for widget in self.findChildren(QWidget):
-                widget.show()
+                if widget not in [
+                    self.collapsed_clipboard_button,
+                    self.collapsed_screenshot_button,
+                    self.collapsed_read_button,
+                ]:
+                    widget.show()
+                else:
+                    widget.hide()
         else:
             for widget in self.findChildren(QWidget):
                 if widget not in [
                     self.talk_button,
                     self.expand_button,
+                    self.collapsed_clipboard_button,
+                    self.collapsed_screenshot_button,
+                    self.collapsed_read_button,
                 ]:
                     widget.hide()
+                else:
+                    widget.show()
 
     def on_talk_button_pressed(self):
 
@@ -1428,10 +1548,9 @@ class SidekickUI(QWidget):
                 )
                 self.update_talk_button("Talk (Hold)", styleSheet=style)
         else:
-            self.clear_status_bar()
+            self.talk_button.setEnabled(False)
             """Stop recording, transcribe audio, and send as prompt."""
             logger.debug("Talk button released")
-            logger.debug("Thinking...")
             # Stop recording
             self.audio_recording = False
             if hasattr(self, "audio_thread"):
@@ -1495,6 +1614,7 @@ class SidekickUI(QWidget):
 
                 logger.debug(f"Transcribed text: {transcribed_text}")
                 self.prompt_input.setText(transcribed_text)
+                self.talk_button.setEnabled(True)
                 self.on_send_button_clicked_nonblocking()
 
     def clean_last_audio_tempfile(self):
@@ -1522,8 +1642,33 @@ class SidekickUI(QWidget):
         self.auto_read = state == Qt.CheckState.Checked.value
 
     def clear_and_exit(self):
-        """Clear context and exit the application."""
+        """Clear context and exit the application, ensuring threads are properly deleted."""
         self.clear_context()
+        # Abort the GPT worker if running
+        if hasattr(self, "gpt_thread") and self.gpt_thread:
+            if hasattr(self, "gpt_worker") and self.gpt_worker:
+                self.gpt_worker.abort_now()
+            # Wait for the thread to finish
+            try:
+                if self.gpt_thread.isRunning():
+                    logger.info("Waiting for GPT thread to finish...")
+                    self.gpt_thread.quit()
+                    self.gpt_thread.wait(
+                        3000
+                    )  # Wait up to 3 seconds for thread to finish
+            except Exception as e:
+                logger.error(f"Error waiting for GPT thread to finish: {e}")
+
+        try:
+            is_playing = pygame.mixer.get_init() and pygame.mixer.music.get_busy()
+            if is_playing:
+                if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
+                    pygame.mixer.music.stop()
+                    tts_clear()
+                    logger.info("Audio playback stopped before quitting.")
+        except Exception as e:
+            logger.error(f"Error stopping audio playback: {e}")
+        self.clean_last_audio_tempfile()
         self.close()
 
     def read_system_prompt(self):

@@ -1,6 +1,9 @@
 import subprocess
 import logging
-import sys
+import logging_config
+
+root_logger = logging_config.setup_root_logging("clipboard.log")
+logger = logging.getLogger(__name__)
 
 
 def get_last_clipboard_text():
@@ -39,9 +42,5 @@ def set_clipboard_text(text):
 
 
 if __name__ == "__main__":
-    import root_logger
-
-    root_logger.setup_root_logging("clipboard-log.log")
-    logger = logging.getLogger(__name__)
 
     get_last_clipboard_text()

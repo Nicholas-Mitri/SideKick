@@ -48,3 +48,5 @@ def setup_root_logging(
         root_logger.handlers.clear()
         root_logger.addHandler(file_handler)
         root_logger.addHandler(console_handler)
+
+    return root_logger

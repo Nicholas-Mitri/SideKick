@@ -10,7 +10,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 from typing import Optional, Union
+import logging_config
 
+root_logger = logging_config.setup_root_logging("screen_grab.log")
 logger = logging.getLogger(__name__)
 
 __all__ = ("grab_area_interactive", "cleanup_tempfile")
@@ -136,10 +138,5 @@ def cleanup_tempfile(target: Union[str, Path]) -> bool:
 
 
 if __name__ == "__main__":
-    # Set up root logger if running as main
-    import root_logger
-
-    root_logger.setup_root_logging("screen-grab-log.log")
-
     logger.info("Running screen_grab.py as main. Invoking grab_area_interactive()...")
-    grab_area_interactive()
+    cleanup_tempfile(grab_area_interactive())

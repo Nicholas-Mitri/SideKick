@@ -698,6 +698,7 @@ class SidekickUI(QWidget):
                     else self.TALK_BUTTON_COLLAPSED_DEFAULT_STYLE
                 )
                 self.update_talk_button("Talk (Hold)", styleSheet=style)
+                self.talk_button.setEnabled(True)
 
         else:
             self.reply_display.clear()
@@ -708,7 +709,9 @@ class SidekickUI(QWidget):
                 else self.TALK_BUTTON_COLLAPSED_INTERRUPT_STYLE
             )
             self.update_talk_button("Interrupt", styleSheet=style)
+            self.talk_button.setEnabled(True)
             self.update_status_bar("Thinking...", "orange", -1)
+            QApplication.processEvents()
             # Create a new worker and thread for GPT processing
             self.gpt_thread = QThread(self)
             self.gpt_worker = GPTWorker(self.context)
@@ -943,6 +946,7 @@ class SidekickUI(QWidget):
             else self.TALK_BUTTON_COLLAPSED_DEFAULT_STYLE
         )
         self.update_talk_button("Talk (Hold)", styleSheet=style)
+        self.talk_button.setEnabled(True)
         self.clean_last_audio_tempfile()
 
     def on_gpt_error(self, error):
@@ -952,18 +956,6 @@ class SidekickUI(QWidget):
     def on_gpt_abort(self, abort):
         logger.info(f"Received abort: {abort}")
         self.update_status_bar("Aborting previous prompt...", "red", 3000)
-        # self.reply_display.clear()
-        # self.prompt_input.clear()
-        # self.streaming_reply = ""
-        # self.citations = dict()
-        # self.partial_transciption = ""
-        # self.clean_last_audio_tempfile()
-        # style = (
-        #     self.TALK_BUTTON_EXPANDED_DEFAULT_STYLE
-        #     if self.expand_at_start
-        #     else self.TALK_BUTTON_COLLAPSED_DEFAULT_STYLE
-        # )
-        # self.update_talk_button("Talk (Hold)", styleSheet=style)
 
     # def on_send_button_clicked(self):
     #     """

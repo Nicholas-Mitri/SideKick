@@ -812,7 +812,6 @@ class SidekickUI(QWidget):
                 if len(delta) < 30:
                     self.streaming_reply += delta
                     self.reply_display.setPlainText(self.streaming_reply)
-                    QApplication.processEvents()
                     if self.auto_read and not self.websearch:
                         self.partial_transciption += delta
                         if (
@@ -822,7 +821,6 @@ class SidekickUI(QWidget):
                             last_few = self.streaming_reply[-10:]
                             match = re.search(r"(?<!\d)([.!?])(?!\d)(?:\s|$)", last_few)
                             if match:
-
                                 tts_enqueue(self.partial_transciption)
                                 self.partial_transciption = ""
                 else:

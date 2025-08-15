@@ -1374,6 +1374,15 @@ class SidekickUI(QWidget):
             self.app_anim_w.setEndValue(self.collapsed_app_width)
             self.app_anim_w.setEasingCurve(QEasingCurve.Type.OutCubic)
             self.anim_group.addAnimation(self.app_anim_w)
+
+            # Move the window to the top right corner of the screen
+            screen = QApplication.primaryScreen()
+            if screen:
+                screen_geometry = screen.availableGeometry()
+                window_width = self.collapsed_app_width
+                x = screen_geometry.x() + screen_geometry.width() - window_width + 20
+                y = screen_geometry.y() + 20
+                self.move(x, y)
         else:
             # Expand UI
             # Style for talk button
@@ -1429,6 +1438,20 @@ class SidekickUI(QWidget):
             self.app_anim_w.setEndValue(self.expanded_app_width)
             self.app_anim_w.setEasingCurve(QEasingCurve.Type.OutCubic)
             self.anim_group.addAnimation(self.app_anim_w)
+
+            # Move the window to the center of the screen after expanding
+            screen = QApplication.primaryScreen()
+            if screen:
+                screen_geometry = screen.availableGeometry()
+                x = (
+                    screen_geometry.x()
+                    + (screen_geometry.width() - self.expanded_app_width) // 2
+                )
+                y = (
+                    screen_geometry.y()
+                    + (screen_geometry.height() - self.expanded_app_height) // 2
+                )
+                self.move(x, y)
 
         # Re-enable UI when all animations finish
         def _on_anims_finished():

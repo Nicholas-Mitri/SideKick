@@ -42,7 +42,7 @@ import threading
 import tempfile
 import wave
 import logging
-import TTS
+import TTS_openai as TTS
 import logging_config
 
 logging_config.setup_root_logging("sidekick.log")

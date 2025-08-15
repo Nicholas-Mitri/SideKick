@@ -32,59 +32,6 @@ DEFAULT_MODEL = "gpt-4o-mini-tts"
 
 logger = logging.getLogger(__name__)
 
-from openai import AsyncOpenAI
-from openai.helpers import LocalAudioPlayer  # Add this import
-
-
-def speak_async_streaming(text: str) -> None:
-    """
-    Non-blocking TTS streaming playback for OpenAI TTS.
-    Creates a new event loop in a background thread to avoid conflicts.
-    """
-
-    def _run_in_thread():
-        """Run async TTS in a dedicated thread with its own event loop"""
-        try:
-            # Create a new event loop for this thread
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-            async def _async_play():
-                logger.info(f"speak_async_streaming called with text: {text[:50]}...")
-                try:
-                    async with AsyncOpenAI().audio.speech.with_streaming_response.create(
-                        model=DEFAULT_MODEL,
-                        voice=DEFAULT_VOICE,
-                        input=text,
-                        response_format="pcm",
-                        # Note: 'instructions' parameter may not be supported - remove if causing issues
-                        # instructions="Speak in a cheerful and positive tone.",
-                    ) as response:
-                        logger.info(
-                            "OpenAI streaming TTS response received, starting playback."
-                        )
-                        player = LocalAudioPlayer()
-                        await player.play(response)
-                        logger.info("Streaming audio playback finished.")
-                except Exception as e:
-                    logger.error(f"Exception in _async_play: {e}", exc_info=True)
-
-            # Run the async function
-            loop.run_until_complete(_async_play())
-
-        except Exception as e:
-            logger.error(f"Exception in _run_in_thread: {e}", exc_info=True)
-        finally:
-            # Clean up the event loop
-            try:
-                loop.close()
-            except Exception as e:
-                logger.error(f"Error closing event loop: {e}")
-
-    # Start the thread
-    thread = threading.Thread(target=_run_in_thread, daemon=True)
-    thread.start()
-
 
 # Keep your original speak_async for backward compatibility
 async def speak_async(text, voice=DEFAULT_VOICE, model=DEFAULT_MODEL):
@@ -95,6 +42,7 @@ async def speak_async(text, voice=DEFAULT_VOICE, model=DEFAULT_MODEL):
         response = await asyncio.to_thread(
             lambda: openai.audio.speech.create(model=model, voice=voice, input=text)
         )
+        print(response)
         audio_data = response.content
         logger.info("Received audio data from OpenAI TTS.")
 
@@ -212,4 +160,4 @@ def clear():
 if __name__ == "__main__":
     # Test speech generation
     logger.info("Running TTS-openAI module as main. Testing play_speech().")
-    asyncio.run(speak_async_streaming("Hello, this is a test!"))
+    asyncio.run(speak_async("Hello, this is a test!"))

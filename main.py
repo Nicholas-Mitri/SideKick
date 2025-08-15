@@ -33,7 +33,7 @@ import screen_grab
 import clipboard
 import TTS
 import asyncio
-import openai
+import openai_helper as openai
 import os
 import json
 import pygame, requests
@@ -44,7 +44,7 @@ import threading
 import tempfile
 import wave
 import logging
-from TTS import enqueue as tts_enqueue, clear as tts_clear
+from TTS_openai import enqueue as tts_enqueue, clear as tts_clear
 
 
 class GPTWorker(QObject):

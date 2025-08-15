@@ -428,7 +428,9 @@ class SidekickUI(QWidget):
         self.collapsed_clipboard_button.setToolTip("Copy from clipboard")
         self.collapsed_read_button = QPushButton()
         self.collapsed_read_button.setStyleSheet(self.COLLAPSED_BUTTONS_DEFAULT_STYLE)
-        self.collapsed_read_button.clicked.connect(self.on_read_button_clicked)
+        self.collapsed_read_button.clicked.connect(
+            self.on_read_button_clicked_streaming
+        )
         self.collapsed_read_button.setToolTip("Start/Stop reading")
 
         # Define paths to your custom icons
@@ -698,22 +700,50 @@ class SidekickUI(QWidget):
     # If a previous thread is running, it aborts it. Otherwise, it prepares the context and starts a new thread.
     def on_send_button_clicked_nonblocking(self):
 
-        # Disable the read button at the start of GPT processing
-        self.read_button.setEnabled(False)
+        if self.prompt_input.toPlainText():
+            if self.gpt_thread:
+                if self.gpt_thread.isRunning():
+                    # Abort the currently running GPT worker if present
+                    self.gpt_worker.abort_now()
+                    style = (
+                        self.TALK_BUTTON_EXPANDED_DEFAULT_STYLE
+                        if self.expand_at_start
+                        else self.TALK_BUTTON_COLLAPSED_DEFAULT_STYLE
+                    )
+                    self.update_talk_button("Talk (Hold)", styleSheet=style)
+                    self.talk_button.setEnabled(True)
 
-        if self.gpt_thread:
-            if self.gpt_thread.isRunning():
-                # Abort the currently running GPT worker if present
-                self.gpt_worker.abort_now()
-                style = (
-                    self.TALK_BUTTON_EXPANDED_DEFAULT_STYLE
-                    if self.expand_at_start
-                    else self.TALK_BUTTON_COLLAPSED_DEFAULT_STYLE
+            if hasattr(self, "tts_thread") and self.tts_thread is not None:
+                logger.info("Checking if TTS thread is running.")
+                if self.tts_thread.isRunning():
+                    logger.info(
+                        "TTS thread is running. Attempting to stop TTS worker and thread."
+                    )
+                    # Stop TTS worker if present
+                    if hasattr(self, "tts_worker") and self.tts_worker is not None:
+                        try:
+                            self.tts_worker.stop()
+                            logger.info("TTS worker stop() called.")
+                        except Exception as e:
+                            logger.error(f"Error stopping TTS worker: {e}")
+                        self.tts_worker = None
+                    # Stop audio playback if still playing
+                    try:
+                        if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
+                            pygame.mixer.music.stop()
+                            logger.info("Audio playback stopped.")
+                    except Exception as e:
+                        logger.error(f"Error stopping audio playback: {e}")
+                self.tts_thread = None
+                logger.info(
+                    "TTS thread set to None. Exiting on_read_button_clicked_streaming."
                 )
-                self.update_talk_button("Talk (Hold)", styleSheet=style)
-                self.talk_button.setEnabled(True)
 
-        else:
+        if self.prompt_input.toPlainText():
+            # Disable the read button at the start of GPT processing
+            self.read_button.setEnabled(False)
+            # Disable the send button at the start of GPT processing
+            self.send_button.setEnabled(False)
             self.reply_display.clear()
 
             style = (
@@ -750,6 +780,8 @@ class SidekickUI(QWidget):
 
             # Re-enable the read button after the GPT thread finishes
             self.gpt_thread.finished.connect(lambda: self.read_button.setEnabled(True))
+            # Re-enable the send button after the GPT thread finishes
+            self.gpt_thread.finished.connect(lambda: self.send_button.setEnabled(True))
 
             # Gather the prompt and any additional context (screenshot, clipboard)
             prompt_text = self.prompt_input.toPlainText()
@@ -821,51 +853,54 @@ class SidekickUI(QWidget):
             # Start the worker thread
             self.gpt_thread.start()
 
-        if self.auto_read:
-            # Clean up existing TTS thread if it exists
-            if (
-                hasattr(self, "tts_thread")
-                and self.tts_thread
-                and self.tts_thread.isRunning()
-            ):
-                if self.tts_worker:
-                    self.tts_worker.stop()
-                self.tts_thread.quit()
-                self.tts_thread.wait(1000)  # Wait up to 1 second
+            if self.auto_read:
+                # Clean up existing TTS thread if it exists
+                if (
+                    hasattr(self, "tts_thread")
+                    and self.tts_thread
+                    and self.tts_thread.isRunning()
+                ):
+                    # Only stop the worker, but do not quit the thread here.
+                    if self.tts_worker is not None:
+                        try:
+                            self.tts_worker.stop()
+                        except Exception as e:
+                            logger.error(f"Error stopping TTS worker: {e}")
+                    # Do not quit or wait for the thread here; let cleanup be handled by signal connections.
 
-            try:
-                # Create new TTS worker and thread
-                self.tts_thread = QThread()
-                self.tts_worker = TTS_S.TTSWorker(TTS_S.api_key)
-                self.tts_worker.moveToThread(self.tts_thread)
+                try:
+                    # Create new TTS worker and thread
+                    self.tts_thread = QThread()
+                    self.tts_worker = TTS_S.TTSWorker(TTS_S.api_key)
+                    self.tts_worker.moveToThread(self.tts_thread)
 
-                # Connect signals for proper cleanup
-                self.tts_worker.error_occurred.connect(self.handle_error)
-                self.tts_worker.finished.connect(self.on_playback_finished)
+                    # Connect signals for proper cleanup
+                    self.tts_worker.error_occurred.connect(self.handle_error)
+                    self.tts_worker.finished.connect(self.on_playback_finished)
 
-                # Ensure proper cleanup after completion or error
-                for signal in [
-                    self.tts_worker.finished,
-                    self.tts_worker.error_occurred,
-                ]:
-                    signal.connect(self.tts_thread.quit)
-                    signal.connect(self.tts_worker.deleteLater)
-                self.tts_thread.finished.connect(self.tts_thread.deleteLater)
-                self.tts_thread.finished.connect(
-                    lambda: setattr(self, "tts_thread", None)
-                )
-                self.tts_thread.finished.connect(
-                    lambda: setattr(self, "tts_worker", None)
-                )
+                    # Ensure proper cleanup after completion or error
+                    for signal in [
+                        self.tts_worker.finished,
+                        self.tts_worker.error_occurred,
+                    ]:
+                        signal.connect(self.tts_thread.quit)
+                        signal.connect(self.tts_worker.deleteLater)
+                    self.tts_thread.finished.connect(self.tts_thread.deleteLater)
+                    self.tts_thread.finished.connect(
+                        lambda: setattr(self, "tts_thread", None)
+                    )
+                    self.tts_thread.finished.connect(
+                        lambda: setattr(self, "tts_worker", None)
+                    )
 
-                # Start the thread
-                self.tts_thread.start()
-                self.is_playing = True
+                    # Start the thread
+                    self.tts_thread.start()
+                    self.is_playing = True
 
-            except Exception as e:
-                logger.error(f"Failed to start TTS thread: {e}")
-                self.tts_thread = None
-                self.tts_worker = None
+                except Exception as e:
+                    logger.error(f"Failed to start TTS thread: {e}")
+                    self.tts_thread = None
+                    self.tts_worker = None
 
     def on_gpt_chunk(self, chunk):
         logger.info(f"Received chunk")
@@ -954,14 +989,20 @@ class SidekickUI(QWidget):
         self.update_talk_button("Talk (Hold)", styleSheet=style)
         self.talk_button.setEnabled(True)
         self.clean_last_audio_tempfile()
+        # Re-enable the send button when done
+        self.send_button.setEnabled(True)
 
     def on_gpt_error(self, error):
         logger.error(f"Received error: {error}")
         self.update_status_bar(f"Error occured. Please check log.", "red", 3000)
+        # Re-enable the send button on error
+        self.send_button.setEnabled(True)
 
     def on_gpt_abort(self, abort):
         logger.info(f"Received abort: {abort}")
         self.update_status_bar("Aborting previous prompt...", "red", 3000)
+        # Re-enable the send button on abort
+        self.send_button.setEnabled(True)
 
     def update_talk_button(self, text="", styleSheet=None):
         self.talk_button.setText(text)
@@ -1060,10 +1101,34 @@ class SidekickUI(QWidget):
     ##################### STREAMING #######################
     def on_read_button_clicked_streaming(self):
         """Start playing the text - non-blocking"""
-        if self.is_playing:
-            if self.tts_worker:
-                self.tts_worker.stop()
-                return
+        # Check if TTS worker and thread are running, and stop/cleanup if so
+        # Stop playing audio if TTS thread and TTS worker are still active and terminate them
+        if hasattr(self, "tts_thread") and self.tts_thread is not None:
+            logger.info("Checking if TTS thread is running.")
+            if self.tts_thread.isRunning():
+                logger.info(
+                    "TTS thread is running. Attempting to stop TTS worker and thread."
+                )
+                # Stop TTS worker if present
+                if hasattr(self, "tts_worker") and self.tts_worker is not None:
+                    try:
+                        self.tts_worker.stop()
+                        logger.info("TTS worker stop() called.")
+                    except Exception as e:
+                        logger.error(f"Error stopping TTS worker: {e}")
+                    self.tts_worker = None
+                # Stop audio playback if still playing
+                try:
+                    if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
+                        pygame.mixer.music.stop()
+                        logger.info("Audio playback stopped.")
+                except Exception as e:
+                    logger.error(f"Error stopping audio playback: {e}")
+            self.tts_thread = None
+            logger.info(
+                "TTS thread set to None. Exiting on_read_button_clicked_streaming."
+            )
+            return
 
         text = self.reply_display.toPlainText().strip()
         if not text:
@@ -1109,7 +1174,8 @@ class SidekickUI(QWidget):
         self.tts_thread = None
 
     def on_gpt_chunk_streaming(self, chunk):
-        logger.info(f"Received chunk")
+        logger.info("on_gpt_chunk_streaming called")
+
         t = chunk.get("type")
         if t == "response.output_text.delta":
             # Depending on provider schema, text might be in obj["delta"]["text"] or obj["output_text"]["delta"]
@@ -1118,16 +1184,27 @@ class SidekickUI(QWidget):
                 if len(delta) < 30:
                     self.streaming_reply += delta
                     self.reply_display.setPlainText(self.streaming_reply)
+
                     if self.auto_read and not self.websearch:
                         self.partial_transciption += delta
+                        logger.info(
+                            f"Updated partial_transciption: {self.partial_transciption}"
+                        )
                         if len(self.partial_transciption) > self.mininumAnswerLength:
+                            logger.info(
+                                "partial_transciption length exceeded mininumAnswerLength, creating chunks."
+                            )
                             chunks, self.partial_transciption = (
                                 self.chunker.create_chunks(self.partial_transciption)
                             )
+                            logger.info(
+                                f"Chunks created: {chunks}, Remaining partial_transciption: {self.partial_transciption}"
+                            )
                             for chunk in chunks:
-                                logging.info(f"Sending chunk: {chunk}")
+                                logger.info(f"Sending chunk to TTS: {chunk}")
                                 self.tts_worker.add_chunk(chunk)
                 else:
+                    logger.info(f"Delta is long, treating as citation: {delta}")
                     if not self.citations.get(delta, 0):
                         citation_num = len(self.citations)
                         self.citations[delta] = {
@@ -1135,38 +1212,57 @@ class SidekickUI(QWidget):
                             "title": "",
                             "order": citation_num + 1,
                         }
+                        logger.info(f"Added new citation: {self.citations[delta]}")
 
                     self.streaming_reply += f"[{self.citations[delta]['order']}]"
+                    logger.info(
+                        f"Appended citation order to streaming_reply: {self.streaming_reply}"
+                    )
 
         elif t == "response.output_text.annotation.added":
             url = chunk.get("annotation", {}).get("url")
             title = chunk.get("annotation", {}).get("title", {})
+            logger.info(f"Annotation added: url={url}, title={title}")
             for key in self.citations.keys():
                 if url in key:
+                    logger.info(f"Updating citation for key: {key}")
                     self.citations[key]["url"] = url
                     self.citations[key]["title"] = title
 
     def on_gpt_done_streaming(self):
+        logger.info("on_gpt_done_streaming called")
         if self.gpt_worker._abort:
             logger.info("DONE AFTER ABORT")
             self.reply_display.clear()
-
+            logger.debug("Reply display cleared due to abort.")
         else:
-            logger.info(f"Received done")
+            logger.info("Received done")
             self.clear_status_bar()
             if self.websearch:
+                logger.debug("Websearch mode active. Formatting web reply.")
                 final_reply = self.format_web_reply(
                     self.streaming_reply, self.citations
                 )
                 self.reply_display.setPlainText(final_reply)
+                logger.debug("Reply display set with formatted web reply.")
                 QApplication.processEvents()
+                logger.debug(
+                    "QApplication.processEvents() called after setting reply display."
+                )
                 if self.auto_read:
+                    logger.debug(
+                        "auto_read is enabled, calling on_read_button_clicked_streaming()"
+                    )
                     self.on_read_button_clicked_streaming()
             else:
                 if self.auto_read and self.partial_transciption:
+                    logger.info(
+                        f"auto_read is enabled and partial_transciption exists, adding chunk: {self.partial_transciption}"
+                    )
                     self.tts_worker.add_chunk(self.partial_transciption)
 
             reply = self.streaming_reply
+            logger.debug(f"Appending assistant reply to context: {reply}")
             self.context.append(
                 {
                     "role": "assistant",
@@ -1176,10 +1272,12 @@ class SidekickUI(QWidget):
 
             # Update the clear context button to show the number of exchanges
             self.clear_context_button.setText(f"Clear Context ({len(self.context)-1})")
+
             # Clear the prompt input field
             self.prompt_input.clear()
             logger.info("Prompt input cleared and context button updated.")
 
+        logger.debug("Resetting streaming_reply, citations, and partial_transciption.")
         self.streaming_reply = ""
         self.citations = dict()
         self.partial_transciption = ""
@@ -1189,9 +1287,14 @@ class SidekickUI(QWidget):
             if self.expand_at_start
             else self.TALK_BUTTON_COLLAPSED_DEFAULT_STYLE
         )
+        logger.debug(f"Updating talk button style: {style}")
         self.update_talk_button("Talk (Hold)", styleSheet=style)
         self.talk_button.setEnabled(True)
+        logger.debug("Talk button enabled.")
         self.clean_last_audio_tempfile()
+        logger.debug("Cleaned last audio tempfile.")
+        # Re-enable the send button when done
+        self.send_button.setEnabled(True)
 
     ##################### STREAMING #######################
     def print_context(self):
@@ -1541,75 +1644,85 @@ class SidekickUI(QWidget):
                     else self.TALK_BUTTON_COLLAPSED_DEFAULT_STYLE
                 )
                 self.update_talk_button("Talk (Hold)", styleSheet=style)
-        else:
-            self.talk_button.setEnabled(False)
-            """Stop recording, transcribe audio, and send as prompt."""
-            logger.debug("Talk button released")
-            # Stop recording
-            self.audio_recording = False
-            if hasattr(self, "audio_thread"):
-                self.audio_thread.join()
-            # Combine frames into a numpy array (optional: save or process)
-            if hasattr(self, "audio_frames"):
-                try:
-                    audio_data = np.concatenate(self.audio_frames, axis=0)
-                except Exception as e:
-                    logger.error(f"Error combining audio frames: {e}")
-                    self.update_status_bar(
-                        text="Error Recording",
-                        color="red",
-                        timer=3000,
-                    )
-                    style = (
-                        self.TALK_BUTTON_EXPANDED_DEFAULT_STYLE
-                        if self.expand_at_start
-                        else self.TALK_BUTTON_COLLAPSED_DEFAULT_STYLE
-                    )
-                    self.update_talk_button("Talk (Hold)", styleSheet=style)
-                    self.clean_last_audio_tempfile()
-                    return
 
-                logger.debug(f"Recorded {len(audio_data)} samples.")
+        # Check if TTS worker and thread are running, and stop/cleanup if so
+        if hasattr(self, "tts_worker") and self.tts_worker is not None:
+            try:
+                self.tts_worker.stop()
+                self.tts_worker = None
+            except Exception as e:
+                logger.error(f"Error stopping TTS worker: {e}")
+        if hasattr(self, "tts_thread") and self.tts_thread is not None:
+            if self.tts_thread.isRunning():
+                self.tts_thread.quit()
+                self.tts_thread.wait(3000)
+            self.tts_thread = None
+            return
 
-                # Save as WAV to a temporary file
-                with tempfile.NamedTemporaryFile(
-                    suffix=".wav", delete=False
-                ) as wav_temp:
-                    with wave.open(wav_temp, "wb") as wf:
-                        wf.setnchannels(1)
-                        wf.setsampwidth(2)  # 16-bit audio
-                        wf.setframerate(self.audio_fs)
-                        wf.writeframes(audio_data.tobytes())
-                    self.last_audio_wav_path = wav_temp.name  # Store path for later use
-
-                logger.debug(
-                    f"Audio saved as wav in tempfile: {self.last_audio_wav_path}"
+        self.talk_button.setEnabled(False)
+        """Stop recording, transcribe audio, and send as prompt."""
+        logger.debug("Talk button released")
+        # Stop recording
+        self.audio_recording = False
+        if hasattr(self, "audio_thread"):
+            self.audio_thread.join()
+        # Combine frames into a numpy array (optional: save or process)
+        if hasattr(self, "audio_frames"):
+            try:
+                audio_data = np.concatenate(self.audio_frames, axis=0)
+            except Exception as e:
+                logger.error(f"Error combining audio frames: {e}")
+                self.update_status_bar(
+                    text="Error Recording",
+                    color="red",
+                    timer=3000,
                 )
-                try:
-                    transcribed_text = openai.transcribe_audio(self.last_audio_wav_path)
-                except Exception as e:
-                    logger.error(f"Error transcribing audio: {e}")
-                    self.update_status_bar(
-                        text="Error Transcribing",
-                        color="red",
-                        timer=3000,
-                    )
-                    style = (
-                        self.TALK_BUTTON_EXPANDED_DEFAULT_STYLE
-                        if self.expand_at_start
-                        else self.TALK_BUTTON_COLLAPSED_DEFAULT_STYLE
-                    )
-                    self.update_talk_button("Talk (Hold)", styleSheet=style)
-                    return
-                finally:
-                    # Clean up the temporary audio file
-                    logger.info("Cleaning up last audio tempfile.")
-                    self.clean_last_audio_tempfile()
+                style = (
+                    self.TALK_BUTTON_EXPANDED_DEFAULT_STYLE
+                    if self.expand_at_start
+                    else self.TALK_BUTTON_COLLAPSED_DEFAULT_STYLE
+                )
+                self.update_talk_button("Talk (Hold)", styleSheet=style)
+                self.clean_last_audio_tempfile()
+                return
 
-                logger.debug(f"Transcribed text: {transcribed_text}")
-                self.prompt_input.setText(transcribed_text)
-                self.talk_button.setEnabled(True)
-                self.on_send_button_clicked_nonblocking()
+            logger.debug(f"Recorded {len(audio_data)} samples.")
+
+            # Save as WAV to a temporary file
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as wav_temp:
+                with wave.open(wav_temp, "wb") as wf:
+                    wf.setnchannels(1)
+                    wf.setsampwidth(2)  # 16-bit audio
+                    wf.setframerate(self.audio_fs)
+                    wf.writeframes(audio_data.tobytes())
+                self.last_audio_wav_path = wav_temp.name  # Store path for later use
+
+            logger.debug(f"Audio saved as wav in tempfile: {self.last_audio_wav_path}")
+            try:
+                transcribed_text = openai.transcribe_audio(self.last_audio_wav_path)
+            except Exception as e:
+                logger.error(f"Error transcribing audio: {e}")
+                self.update_status_bar(
+                    text="Error Transcribing",
+                    color="red",
+                    timer=3000,
+                )
+                style = (
+                    self.TALK_BUTTON_EXPANDED_DEFAULT_STYLE
+                    if self.expand_at_start
+                    else self.TALK_BUTTON_COLLAPSED_DEFAULT_STYLE
+                )
+                self.update_talk_button("Talk (Hold)", styleSheet=style)
+                return
+            finally:
+                # Clean up the temporary audio file
+                logger.info("Cleaning up last audio tempfile.")
+                self.clean_last_audio_tempfile()
+
+            logger.debug(f"Transcribed text: {transcribed_text}")
+            self.prompt_input.setText(transcribed_text)
+            self.talk_button.setEnabled(True)
+            self.on_send_button_clicked_nonblocking()
 
     def clean_last_audio_tempfile(self):
         """Delete the last temporary audio file if it exists."""

@@ -113,6 +113,7 @@ class TTSWorker(QObject):
     finished = pyqtSignal()
     chunk_generated = pyqtSignal(bytes)  # Signal when chunk audio is ready
     started = pyqtSignal()  # Signal when playback starts
+    stopped = pyqtSignal()  # Signal when playback is stopped
 
     def __init__(self, api_key: str):
         super().__init__()
@@ -122,6 +123,10 @@ class TTSWorker(QObject):
         self.is_running = False
         self.audio_queue = queue.Queue()
         self.playback_thread = None
+
+        # NEW: Queue for sequential chunk processing
+        self.chunk_input_queue = queue.Queue()
+        self.chunk_generation_thread = None
 
         # Initialize pygame mixer
         pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
@@ -135,11 +140,8 @@ class TTSWorker(QObject):
         if not self.is_running:
             self._start_system()
 
-        # Generate audio for this chunk in background
-        generation_thread = threading.Thread(
-            target=self._generate_single_chunk, args=(chunk_text,), daemon=True
-        )
-        generation_thread.start()
+        # Add chunk to input queue for sequential processing
+        self.chunk_input_queue.put(chunk_text)
 
     def _start_system(self):
         """Initialize the playback system"""
@@ -149,6 +151,12 @@ class TTSWorker(QObject):
         self.is_running = True
         self.is_stopping = False
 
+        # Start chunk generation thread (NEW)
+        self.chunk_generation_thread = threading.Thread(
+            target=self._chunk_generation_worker, daemon=True
+        )
+        self.chunk_generation_thread.start()
+
         # Start playback thread
         self.playback_thread = threading.Thread(
             target=self._playback_worker, daemon=True
@@ -157,15 +165,37 @@ class TTSWorker(QObject):
 
         self.started.emit()
 
-    def _generate_single_chunk(self, chunk_text: str):
-        """Generate audio for a single chunk and add to queue"""
-        if self.is_stopping:
-            return
+    def _chunk_generation_worker(self):
+        """Background thread that processes chunks sequentially from the input queue"""
+        while not self.is_stopping:
+            try:
+                # Get next chunk text (blocking with timeout)
+                chunk_text = self.chunk_input_queue.get(timeout=1.0)
 
-        audio_data = self._generate_audio(chunk_text)
-        if audio_data is not None:
-            self.audio_queue.put(audio_data)
-            self.chunk_generated.emit(audio_data)
+                if self.is_stopping:
+                    break
+
+                # Generate audio for this chunk
+                audio_data = self._generate_audio(chunk_text)
+                if audio_data is not None:
+                    self.audio_queue.put(audio_data)
+                    self.chunk_generated.emit(audio_data)
+
+                # Mark task as done
+                self.chunk_input_queue.task_done()
+
+            except queue.Empty:
+                # No chunks available, continue waiting
+                continue
+            except Exception as e:
+                if not self.is_stopping:
+                    self.error_occurred.emit(f"Chunk generation error: {str(e)}")
+                break
+
+    def _generate_single_chunk(self, chunk_text: str):
+        """Generate audio for a single chunk and add to queue (DEPRECATED - kept for compatibility)"""
+        # This method is now just a wrapper for add_chunk for backward compatibility
+        self.add_chunk(chunk_text)
 
     def start_tts(self, text: str):
         """Start TTS processing - non-blocking"""
@@ -189,21 +219,15 @@ class TTSWorker(QObject):
                 self.error_occurred.emit("No text to process")
                 return
 
-            # Generate and queue audio chunks
+            # Add chunks to sequential processing queue
             for chunk in chunks:
                 if self.is_stopping:
                     break
+                self.chunk_input_queue.put(chunk)
 
-                # Generate audio for this chunk
-                audio_data = self._generate_audio(chunk)
-                if audio_data is None:
-                    break  # Error occurred or stopping
-
-                # Queue audio for playback
-                self.audio_queue.put(audio_data)
-                self.chunk_generated.emit(audio_data)  # Signal chunk is ready
-
-            # Signal end of generation
+            # Signal end of generation after all chunks are processed
+            # We'll wait for the chunk queue to be empty, then signal end
+            self.chunk_input_queue.join()  # Wait for all chunks to be processed
             self.audio_queue.put(None)  # Sentinel value
 
         except Exception as e:
@@ -287,13 +311,20 @@ class TTSWorker(QObject):
         except:
             pass
 
-        # Clear the queue
+        # Clear both queues
         while not self.audio_queue.empty():
             try:
                 self.audio_queue.get_nowait()
             except queue.Empty:
                 break
 
+        while not self.chunk_input_queue.empty():
+            try:
+                self.chunk_input_queue.get_nowait()
+            except queue.Empty:
+                break
+
+        self.stopped.emit()
         self.finished.emit()
 
 
@@ -361,6 +392,7 @@ class SimpleTTSApp(QMainWindow):
         # Connect signals
         self.tts_worker.error_occurred.connect(self.handle_error)
         self.tts_worker.finished.connect(self.on_playback_finished)
+        self.tts_worker.stopped.connect(self.on_playback_finished)
 
         # Start the thread
         self.tts_thread.start()

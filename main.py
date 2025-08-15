@@ -31,7 +31,6 @@ from PyQt6.QtCore import (
 
 import screen_grab
 import clipboard
-import TTS
 import asyncio
 import openai_helper as openai
 import os
@@ -44,7 +43,7 @@ import threading
 import tempfile
 import wave
 import logging
-from TTS_openai import enqueue as tts_enqueue, clear as tts_clear
+import TTS_openai as TTS
 
 
 class GPTWorker(QObject):
@@ -824,7 +823,7 @@ class SidekickUI(QWidget):
                             last_few = self.streaming_reply[-10:]
                             match = re.search(r"(?<!\d)([.!?])(?!\d)(?:\s|$)", last_few)
                             if match:
-                                tts_enqueue(self.partial_transciption)
+                                TTS.enqueue(self.partial_transciption)
                                 self.partial_transciption = ""
                 else:
                     if not self.citations.get(delta, 0):
@@ -871,7 +870,7 @@ class SidekickUI(QWidget):
     #                                 r"(?<!\d)([.!?])(?!\d)(?:\s|$)", last_few
     #                             )
     #                             if match:
-    #                                 tts_enqueue(partial_transciption)
+    #                                 enqueue(partial_transciption)
     #                                 partial_transciption = ""
     #                 else:
     #                     if not citations.get(delta, 0):
@@ -901,7 +900,7 @@ class SidekickUI(QWidget):
     #                 asyncio.run(TTS.speak_async(streaming_reply))
     #                 return final_reply
     #             else:
-    #                 tts_enqueue(partial_transciption)
+    #                 enqueue(partial_transciption)
     #                 return streaming_reply
 
     def on_gpt_done(self):
@@ -920,7 +919,7 @@ class SidekickUI(QWidget):
                 QApplication.processEvents()
                 asyncio.run(TTS.speak_async(self.streaming_reply))
             else:
-                tts_enqueue(self.partial_transciption)
+                TTS.enqueue(self.partial_transciption)
 
             reply = self.streaming_reply
             self.context.append(
@@ -1492,6 +1491,20 @@ class SidekickUI(QWidget):
                     widget.show()
                 else:
                     widget.hide()
+
+                    # Move the window to the center of the screen after expanding
+            screen = QApplication.primaryScreen()
+            if screen:
+                screen_geometry = screen.availableGeometry()
+                x = (
+                    screen_geometry.x()
+                    + (screen_geometry.width() - self.expanded_app_width) // 2
+                )
+                y = (
+                    screen_geometry.y()
+                    + (screen_geometry.height() - self.expanded_app_height) // 2
+                )
+                self.move(x, y)
         else:
             for widget in self.findChildren(QWidget):
                 if widget not in [
@@ -1505,6 +1518,15 @@ class SidekickUI(QWidget):
                 else:
                     widget.show()
 
+            # Move the window to the top right corner of the screen
+            screen = QApplication.primaryScreen()
+            if screen:
+                screen_geometry = screen.availableGeometry()
+                window_width = self.collapsed_app_width
+                x = screen_geometry.x() + screen_geometry.width() - window_width - 20
+                y = screen_geometry.y() + 20
+                self.move(x, y)
+
     def on_talk_button_pressed(self):
 
         if self.gpt_thread:
@@ -1512,7 +1534,7 @@ class SidekickUI(QWidget):
                 return
         else:
             """Start recording audio for voice input."""
-            tts_clear()
+            TTS.clear()
             logger.debug("Talk button pressed")
             self.update_status_bar(
                 text="Listening...",
@@ -1677,7 +1699,7 @@ class SidekickUI(QWidget):
             if is_playing:
                 if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
                     pygame.mixer.music.stop()
-                    tts_clear()
+                    TTS.clear()
                     logger.info("Audio playback stopped before quitting.")
         except Exception as e:
             logger.error(f"Error stopping audio playback: {e}")

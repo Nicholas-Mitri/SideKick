@@ -566,6 +566,7 @@ class SidekickUI(QWidget):
         # Web search context checkbox
         self.checkbox_websearch = QCheckBox("Web Search")
         self.checkbox_websearch.setChecked(self.websearch)
+        self.checkbox_websearch.setEnabled(False)
         self.checkbox_websearch.stateChanged.connect(self.on_websearch_state_changed)
         self.checkbox_websearch.setToolTip("Enable web search.")
 
@@ -858,10 +859,12 @@ class SidekickUI(QWidget):
                 )
                 self.reply_display.setPlainText(final_reply)
                 QApplication.processEvents()
-                asyncio.run(TTS.speak_async(final_reply))
+                if self.auto_read:
+                    asyncio.run(TTS.speak_async_streaming(final_reply))
             else:
                 # TTS.enqueue(self.partial_transciption)
-                asyncio.run(TTS.speak_async(self.streaming_reply))
+                if self.auto_read:
+                    asyncio.run(TTS.speak_async_streaming(self.streaming_reply))
 
             reply = self.streaming_reply
             self.context.append(
@@ -981,7 +984,7 @@ class SidekickUI(QWidget):
         if not is_playing:
             # Read the reply text aloud using TTS
             reply_text = self.reply_display.toPlainText()
-            asyncio.run(TTS.speak_async(reply_text))
+            asyncio.run(TTS.speak_async_streaming(reply_text))
         else:
             # Stop audio playback if currently playing
             try:

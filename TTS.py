@@ -37,16 +37,11 @@ async def speak_async(text, voice="en-US-AndrewNeural"):
         if chunk["type"] == "audio":
             audio_data += chunk["data"]
 
-    # Start playback but don't await it
-    def play_in_background():
-        pygame.mixer.init()
-        pygame.mixer.music.load(io.BytesIO(audio_data))
-        pygame.mixer.music.play()
-        while pygame.mixer.music.get_busy():
-            time.sleep(0.1)
-
-    # Start thread and continue immediately
-    threading.Thread(target=play_in_background, daemon=True).start()
+    pygame.mixer.init()
+    pygame.mixer.music.load(io.BytesIO(audio_data))
+    pygame.mixer.music.play()
+    while pygame.mixer.music.get_busy():
+        time.sleep(0.1)
 
 
 async def save_speech(text="Hello, this is a test!", voice="en-US-AndrewNeural"):
@@ -130,3 +125,4 @@ def clear():
 if __name__ == "__main__":
     # Test speech generation
     asyncio.run(play_speech())
+    asyncio.run(speak_async("Hello, this is a test!"))

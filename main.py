@@ -44,6 +44,7 @@ import wave
 import logging
 import TTS_openai as TTS
 import logging_config
+import TTS_openai_streaming as TTS_S
 
 logging_config.setup_root_logging("sidekick.log")
 logger = logging.getLogger(__name__)
@@ -123,6 +124,12 @@ class SidekickUI(QWidget):
         # Keep the window always on top
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
 
+        # Set up TTS Streaming
+        self.tts_worker = None
+        self.tts_thread = None
+        self.is_playing = False
+        self.chunker = TTS_S.SentenceChunker()
+        self.mininumAnswerLength = 100
         # Set dark mode app-wide style to match button_dark_style, with more padding and smaller font
         # Initialize SidekickUI state variables
         self.clipboard = False
@@ -134,7 +141,7 @@ class SidekickUI(QWidget):
         self.img_url = ""
         self.clipboard_text = ""
         self.right_widget_width = 140
-        self.expand_at_start = False
+        self.expand_at_start = True
         self.talk_button_height_after_expand = 35
 
         self.collapsed_app_width = 200
@@ -586,7 +593,7 @@ class SidekickUI(QWidget):
 
         # Read/Stop TTS button
         self.read_button = QPushButton("Read/Stop")
-        self.read_button.clicked.connect(self.on_read_button_clicked)
+        self.read_button.clicked.connect(self.on_read_button_clicked_streaming)
         self.read_button.setToolTip("Read/Stop reply.")
 
         # Add all options to layout
@@ -691,6 +698,9 @@ class SidekickUI(QWidget):
     # If a previous thread is running, it aborts it. Otherwise, it prepares the context and starts a new thread.
     def on_send_button_clicked_nonblocking(self):
 
+        # Disable the read button at the start of GPT processing
+        self.read_button.setEnabled(False)
+
         if self.gpt_thread:
             if self.gpt_thread.isRunning():
                 # Abort the currently running GPT worker if present
@@ -721,8 +731,8 @@ class SidekickUI(QWidget):
 
             # Connect signals for thread-safe communication
             self.gpt_thread.started.connect(self.gpt_worker.run)
-            self.gpt_worker.chunk.connect(self.on_gpt_chunk)
-            self.gpt_worker.done.connect(self.on_gpt_done)
+            self.gpt_worker.chunk.connect(self.on_gpt_chunk_streaming)
+            self.gpt_worker.done.connect(self.on_gpt_done_streaming)
             self.gpt_worker.error.connect(self.on_gpt_error)
             self.gpt_worker.abort.connect(self.on_gpt_abort)
 
@@ -737,6 +747,9 @@ class SidekickUI(QWidget):
             self.gpt_thread.finished.connect(self.gpt_thread.deleteLater)
             self.gpt_thread.finished.connect(lambda: setattr(self, "gpt_thread", None))
             self.gpt_thread.finished.connect(lambda: setattr(self, "gpt_worker", None))
+
+            # Re-enable the read button after the GPT thread finishes
+            self.gpt_thread.finished.connect(lambda: self.read_button.setEnabled(True))
 
             # Gather the prompt and any additional context (screenshot, clipboard)
             prompt_text = self.prompt_input.toPlainText()
@@ -807,6 +820,52 @@ class SidekickUI(QWidget):
 
             # Start the worker thread
             self.gpt_thread.start()
+
+        if self.auto_read:
+            # Clean up existing TTS thread if it exists
+            if (
+                hasattr(self, "tts_thread")
+                and self.tts_thread
+                and self.tts_thread.isRunning()
+            ):
+                if self.tts_worker:
+                    self.tts_worker.stop()
+                self.tts_thread.quit()
+                self.tts_thread.wait(1000)  # Wait up to 1 second
+
+            try:
+                # Create new TTS worker and thread
+                self.tts_thread = QThread()
+                self.tts_worker = TTS_S.TTSWorker(TTS_S.api_key)
+                self.tts_worker.moveToThread(self.tts_thread)
+
+                # Connect signals for proper cleanup
+                self.tts_worker.error_occurred.connect(self.handle_error)
+                self.tts_worker.finished.connect(self.on_playback_finished)
+
+                # Ensure proper cleanup after completion or error
+                for signal in [
+                    self.tts_worker.finished,
+                    self.tts_worker.error_occurred,
+                ]:
+                    signal.connect(self.tts_thread.quit)
+                    signal.connect(self.tts_worker.deleteLater)
+                self.tts_thread.finished.connect(self.tts_thread.deleteLater)
+                self.tts_thread.finished.connect(
+                    lambda: setattr(self, "tts_thread", None)
+                )
+                self.tts_thread.finished.connect(
+                    lambda: setattr(self, "tts_worker", None)
+                )
+
+                # Start the thread
+                self.tts_thread.start()
+                self.is_playing = True
+
+            except Exception as e:
+                logger.error(f"Failed to start TTS thread: {e}")
+                self.tts_thread = None
+                self.tts_worker = None
 
     def on_gpt_chunk(self, chunk):
         logger.info(f"Received chunk")
@@ -998,6 +1057,143 @@ class SidekickUI(QWidget):
             except Exception as e:
                 print(f"Error stopping audio playback: {e}")
 
+    ##################### STREAMING #######################
+    def on_read_button_clicked_streaming(self):
+        """Start playing the text - non-blocking"""
+        if self.is_playing:
+            if self.tts_worker:
+                self.tts_worker.stop()
+                return
+
+        text = self.reply_display.toPlainText().strip()
+        if not text:
+            return
+
+        # Replace with your actual OpenAI API key
+        # Create worker and thread
+        self.tts_thread = QThread()
+        self.tts_worker = TTS_S.TTSWorker(TTS_S.api_key)
+        self.tts_worker.moveToThread(self.tts_thread)
+
+        # Connect signals
+        self.tts_worker.error_occurred.connect(self.handle_error)
+        self.tts_worker.finished.connect(self.on_playback_finished)
+
+        # Start the thread
+        self.tts_thread.start()
+
+        # Update UI state
+        self.is_playing = True
+
+        # Start TTS processing (non-blocking)
+        self.tts_worker.start_tts(text)
+
+    def handle_error(self, error_message: str):
+        """Handle TTS errors"""
+        print(f"Error: {error_message}")
+        self.cleanup_worker()
+
+    def on_playback_finished(self):
+        """Called when playback is finished"""
+        self.cleanup_worker()
+
+    def cleanup_worker(self):
+        """Clean up worker thread and reset UI"""
+        self.is_playing = False
+
+        if self.tts_thread and self.tts_thread.isRunning():
+            self.tts_thread.quit()
+            self.tts_thread.wait(3000)  # Wait up to 3 seconds
+
+        self.tts_worker = None
+        self.tts_thread = None
+
+    def on_gpt_chunk_streaming(self, chunk):
+        logger.info(f"Received chunk")
+        t = chunk.get("type")
+        if t == "response.output_text.delta":
+            # Depending on provider schema, text might be in obj["delta"]["text"] or obj["output_text"]["delta"]
+            delta = chunk.get("delta", {})
+            if delta:
+                if len(delta) < 30:
+                    self.streaming_reply += delta
+                    self.reply_display.setPlainText(self.streaming_reply)
+                    if self.auto_read and not self.websearch:
+                        self.partial_transciption += delta
+                        if len(self.partial_transciption) > self.mininumAnswerLength:
+                            chunks, self.partial_transciption = (
+                                self.chunker.create_chunks(self.partial_transciption)
+                            )
+                            for chunk in chunks:
+                                logging.info(f"Sending chunk: {chunk}")
+                                self.tts_worker.add_chunk(chunk)
+                else:
+                    if not self.citations.get(delta, 0):
+                        citation_num = len(self.citations)
+                        self.citations[delta] = {
+                            "url": "",
+                            "title": "",
+                            "order": citation_num + 1,
+                        }
+
+                    self.streaming_reply += f"[{self.citations[delta]['order']}]"
+
+        elif t == "response.output_text.annotation.added":
+            url = chunk.get("annotation", {}).get("url")
+            title = chunk.get("annotation", {}).get("title", {})
+            for key in self.citations.keys():
+                if url in key:
+                    self.citations[key]["url"] = url
+                    self.citations[key]["title"] = title
+
+    def on_gpt_done_streaming(self):
+        if self.gpt_worker._abort:
+            logger.info("DONE AFTER ABORT")
+            self.reply_display.clear()
+
+        else:
+            logger.info(f"Received done")
+            self.clear_status_bar()
+            if self.websearch:
+                final_reply = self.format_web_reply(
+                    self.streaming_reply, self.citations
+                )
+                self.reply_display.setPlainText(final_reply)
+                QApplication.processEvents()
+                if self.auto_read:
+                    self.on_read_button_clicked_streaming()
+            else:
+                if self.auto_read and self.partial_transciption:
+                    self.tts_worker.add_chunk(self.partial_transciption)
+
+            reply = self.streaming_reply
+            self.context.append(
+                {
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": f"{reply}"}],
+                }
+            )
+
+            # Update the clear context button to show the number of exchanges
+            self.clear_context_button.setText(f"Clear Context ({len(self.context)-1})")
+            # Clear the prompt input field
+            self.prompt_input.clear()
+            logger.info("Prompt input cleared and context button updated.")
+
+        self.streaming_reply = ""
+        self.citations = dict()
+        self.partial_transciption = ""
+
+        style = (
+            self.TALK_BUTTON_EXPANDED_DEFAULT_STYLE
+            if self.expand_at_start
+            else self.TALK_BUTTON_COLLAPSED_DEFAULT_STYLE
+        )
+        self.update_talk_button("Talk (Hold)", styleSheet=style)
+        self.talk_button.setEnabled(True)
+        self.clean_last_audio_tempfile()
+
+    ##################### STREAMING #######################
     def print_context(self):
         """Print the current conversation context to the console."""
         print(self.context)

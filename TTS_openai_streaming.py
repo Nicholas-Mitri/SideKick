@@ -144,6 +144,8 @@ class TTSService(QObject):
         pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
         logger.info("Pygame mixer initialized.")
 
+        # Tone setting for TTS Model
+        self.TTS_instructions = None
         # Start the persistent worker threads
         self._start_service()
 
@@ -248,11 +250,12 @@ class TTSService(QObject):
         try:
             logger.info(f"Requesting TTS for: {text[:60]}...")
             response = self.client.audio.speech.create(
-                model="tts-1",  # Using tts-1 as gpt-4o-mini-tts might not be available
-                voice="alloy",
+                model="gpt-4o-mini-tts",
+                voice="coral",
                 input=text,
                 speed=1.0,
                 response_format="mp3",
+                instructions=self.TTS_instructions,  # You can customize this string as needed
             )
             logger.info("TTS audio received from OpenAI.")
             return response.content

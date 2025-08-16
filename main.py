@@ -124,7 +124,7 @@ class SidekickUI(QWidget):
         self.clipboard = False
         self.screeshot = False
         self.websearch = False
-        self.auto_read = False
+        self.auto_read = True
         self.first_chunk = False
         self.screeshot_taken = False
         self.clipboard_taken = False
@@ -389,6 +389,10 @@ class SidekickUI(QWidget):
         self.partial_transciption = ""
         self.init_tts_service()
         self.chunker = TTS_S.SentenceChunker()
+        self.tts_service.TTS_instructions = "Cheerful and informative fast tone."
+
+        self.add_chunk("Your trusty side kick is READY!")
+
         self.init_ui()
 
     def init_ui(self):
@@ -1261,8 +1265,8 @@ class SidekickUI(QWidget):
     def on_read_button_clicked_streaming(self):
         """Start playing the text - non-blocking"""
         logging.info("Read button clicked.")
-
         # Check if TTS worker is running
+
         if self.tts_service.is_playing:
             self.stop_playback()
             time.sleep(0.3)
